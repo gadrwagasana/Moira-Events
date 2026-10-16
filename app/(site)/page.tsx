@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CTAButtons } from "@/components/CTAButtons";
 import { Logo } from "@/components/Logo";
 import { PlaceholderImage } from "@/components/PlaceholderImage";
 import { ValuesGrid } from "@/components/ValuesGrid";
@@ -27,11 +26,14 @@ export default function HomePage() {
               {knownFor}
             </h1>
             <p className="mt-6 max-w-xl text-lg text-ink/70">{companyDescription.oneLiner}</p>
-            <p className="mt-4 max-w-xl text-sm text-ink/60">
-              Ready to get started? Request a quote for pricing, or book a free consultation if you&rsquo;d like to
-              talk through your vision first.
-            </p>
-            <CTAButtons className="mt-6" />
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <Link href="/request-a-quote" className="btn-primary">
+                Request a Quote
+              </Link>
+              <Link href="/portfolio" className="btn-secondary">
+                Explore Our Work
+              </Link>
+            </div>
           </div>
           <div className="flex aspect-square w-full items-center justify-center rounded-xl border border-espresso-100 bg-gradient-to-br from-ivory-200 via-ivory-100 to-espresso-50 p-12 shadow-sm">
             <Logo className="h-auto w-full max-w-xs" />
@@ -98,20 +100,6 @@ export default function HomePage() {
               See the Full Process
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* Our Work */}
-      <section className="section text-center">
-        <p className="label-eyebrow mb-3">Our Work</p>
-        <h2 className="sr-only">Our Work</h2>
-        <p className="mx-auto max-w-xl text-lg text-ink/70">
-          Every event is shaped around your vision, your guests, and the moments that matter most.
-        </p>
-        <div className="mt-8">
-          <Link href="/portfolio" className="btn-secondary">
-            View Portfolio
-          </Link>
         </div>
       </section>
 
