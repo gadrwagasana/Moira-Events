@@ -1,0 +1,1008 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// Stage A/B — Wedding information architecture & service catalogue
+// Admin-configurable; replaces the previously hardcoded content in
+// lib/content/divisions.ts for the Weddings division only.
+// =============================================================================
+
+model WeddingType {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events   Event[]
+  packages Package[]
+  bookings Booking[]
+
+  @@index([isActive, sortOrder])
+}
+
+model ServiceCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  services Service[]
+
+  @@index([isActive, sortOrder])
+}
+
+enum Division {
+  WEDDING
+  PARTY
+  CORPORATE
+}
+
+model Service {
+  id               String           @id @default(cuid())
+  name             String
+  slug             String           @unique
+  shortDescription String?
+  fullDescription  String?
+  imageUrl         String?
+  division         Division         @default(WEDDING)
+  categoryId       String?
+  category         ServiceCategory? @relation(fields: [categoryId], references: [id])
+  isIncluded       Boolean          @default(true)
+  isAddOn          Boolean          @default(false)
+  isActive         Boolean          @default(true)
+  // Shown publicly when isActive = false (e.g. "Not currently offered")
+  inactiveNote     String?
+  isFeatured       Boolean          @default(false)
+  sortOrder        Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  enquiryServices EnquiryService[]
+  quoteItems      QuoteItem[]
+  bookingServices BookingService[]
+  invoiceItems    InvoiceItem[]
+
+  @@index([division, isActive, sortOrder])
+}
+
+// Defined per the owner's data-model request; not surfaced in the UI until
+// Moira Events confirms real packages, pricing, and inclusions.
+enum PricingType {
+  FIXED
+  STARTING_FROM
+  CUSTOM_QUOTE
+  PER_SERVICE
+  PER_GUEST
+  TBD
+}
+
+model Package {
+  id            String       @id @default(cuid())
+  name          String
+  description   String?
+  weddingTypeId String?
+  weddingType   WeddingType? @relation(fields: [weddingTypeId], references: [id])
+  pricingType   PricingType  @default(CUSTOM_QUOTE)
+  price         Decimal?
+  currency      String?
+  minimumGuests Int?
+  isActive      Boolean      @default(false)
+  isFeatured    Boolean      @default(false)
+  sortOrder     Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+// =============================================================================
+// Stage C/D — Clients, events, and wedding enquiries
+// =============================================================================
+
+enum ContactMethod {
+  EMAIL
+  PHONE
+  WHATSAPP
+}
+
+model Client {
+  id                     String         @id @default(cuid())
+  fullName               String
+  email                  String         @unique
+  phone                  String?
+  whatsapp               String?
+  preferredContactMethod ContactMethod?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  // Client Portal authentication — separate from and never reused by admin
+  // auth. passwordHash presence is the account's existence/status; no
+  // Client row gets one just by being created via an enquiry/consultation.
+  passwordHash  String?
+  passwordSetAt DateTime?
+  lastLoginAt   DateTime?
+
+  // Admin-generated invite link. Hashed at rest (Stage K.5 §8/§11) — the raw
+  // token only ever exists transiently at generation time, shown to admin
+  // exactly once; it is never stored or re-displayable afterward. Doubles as
+  // the password-reset mechanism when regenerated.
+  inviteTokenHash      String?   @unique
+  inviteTokenExpiresAt DateTime?
+
+  // Set on successful invite-activation OR public self-registration
+  // verification — both are equally valid proof the account's owner
+  // controls this email address. Login is blocked while null (§7/§13).
+  emailVerifiedAt            DateTime?
+  emailVerificationTokenHash String?   @unique
+  emailVerificationExpiresAt DateTime?
+
+  // Profile email-change re-verification (§19) — the login email never
+  // changes until the NEW address is confirmed via the same verification
+  // mechanism above, so a mistyped new email can't lock the client out.
+  pendingEmail String?
+
+  passwordResetTokenHash String?   @unique
+  passwordResetExpiresAt DateTime?
+
+  events           Event[]
+  enquiries        Enquiry[]
+  consultations    Consultation[]
+  bookings         Booking[]
+  planningRequests PlanningRequest[]
+}
+
+enum EventType {
+  WEDDING
+  PARTY
+  CORPORATE
+  // No real event — used for general Contact-page messages so they still
+  // show up in the same admin enquiry list as everything else.
+  GENERAL
+}
+
+model Event {
+  id                String       @id @default(cuid())
+  clientId          String
+  client            Client       @relation(fields: [clientId], references: [id])
+  type              EventType    @default(WEDDING)
+  weddingTypeId     String?
+  weddingType       WeddingType? @relation(fields: [weddingTypeId], references: [id])
+  // Free-text category for Party/Corporate (e.g. "Birthday", "Conference"),
+  // sourced from the existing static category lists — not a new table since
+  // those groupings were never meant to be admin-managed like wedding types.
+  eventSubtype      String?
+  eventDate         DateTime?
+  location          String?
+  ceremonyLocation  String?
+  receptionLocation String?
+  estimatedGuests   Int?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  enquiries Enquiry[]
+  bookings  Booking[]
+}
+
+enum EnquiryStatus {
+  NEW
+  UNDER_REVIEW
+  CONSULTATION
+  QUOTE_PREPARATION
+  QUOTE_SENT
+  CLIENT_REVIEW
+  APPROVED
+  BOOKED
+  IN_PLANNING
+  COMPLETED
+  CANCELLED
+  DECLINED
+}
+
+model Enquiry {
+  id                String        @id @default(cuid())
+  referenceNumber   String        @unique
+  clientId          String
+  client            Client        @relation(fields: [clientId], references: [id])
+  eventId           String
+  event             Event         @relation(fields: [eventId], references: [id])
+  status            EnquiryStatus @default(NEW)
+  budgetAmount      Decimal?
+  budgetCurrency    String?
+  otherServicesNote String?
+  message           String?
+  submittedAt       DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  services EnquiryService[]
+  quotes   Quote[]
+
+  @@index([status, submittedAt])
+}
+
+model EnquiryService {
+  id        String  @id @default(cuid())
+  enquiryId String
+  enquiry   Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([enquiryId, serviceId])
+}
+
+// =============================================================================
+// Stages E–H — Quote, booking, payment, invoicing, consultation, communication
+// Schema reserved now per the owner's explicit data-model request (prompt §17)
+// so later stages are additive migrations, not a redesign. No Server
+// Actions/UI are built against these yet; all commercial fields stay
+// nullable — no invented prices, deposits, or policies.
+// =============================================================================
+
+enum QuoteStatus {
+  DRAFT
+  INTERNAL_REVIEW
+  SENT
+  REVISION_REQUESTED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+model Quote {
+  id          String      @id @default(cuid())
+  quoteNumber String      @unique
+  enquiryId   String
+  enquiry     Enquiry     @relation(fields: [enquiryId], references: [id])
+  status      QuoteStatus @default(DRAFT)
+  // Minimum-viable versioning (§14): one row per quote, an incrementing
+  // version number, and an append-only QuoteRevision history log below —
+  // not full quote-cloning, which would be over-engineering for this stage.
+  version     Int         @default(1)
+  currency    String?
+
+  // Visible only to Moira Events staff vs. visible to the client on a future
+  // client-facing quote page — kept as separate columns so that boundary is
+  // enforced at the data level, not just in UI conditionals.
+  clientNotes   String?
+  internalNotes String?
+  terms         String?
+
+  issueDate DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  // Recomputed server-side from line items + discount/tax on every edit —
+  // never a hardcoded rate or invented default (§5, §6).
+  subtotal       Decimal?
+  discountAmount Decimal?
+  discountNote   String?
+  taxAmount      Decimal?
+  taxNote        String?
+  totalAmount    Decimal?
+
+  acceptedAt DateTime?
+  acceptedBy String?
+
+  declinedAt    DateTime?
+  declinedBy    String?
+  declineReason String?
+
+  revisionRequestedAt DateTime?
+  revisionRequestNote String?
+
+  items     QuoteItem[]
+  revisions QuoteRevision[]
+  // One-to-one: Booking.quoteId is @unique (Stage F §20 — the DB itself
+  // prevents a second booking from referencing the same accepted quote).
+  booking   Booking?
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id])
+  description String
+  quantity    Int?     @default(1)
+  // Free text ("flat fee", "per guest", "per day") — no fixed vocabulary is
+  // confirmed, so this stays a plain field rather than an enum.
+  unit        String?
+  unitPrice   Decimal?
+  total       Decimal?
+  notes       String?
+  sortOrder   Int      @default(0)
+}
+
+model QuoteRevision {
+  id            String   @id @default(cuid())
+  quoteId       String
+  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  requestedNote String?
+  // Free text ("admin", "client via phone", a name) — no user-accounts
+  // system exists yet to reference a real actor.
+  changedBy     String?
+  snapshot      Json?
+  createdAt     DateTime @default(now())
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PLANNING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  bookingNumber String        @unique
+  status        BookingStatus @default(PENDING)
+
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id])
+  eventId  String
+  event    Event   @relation(fields: [eventId], references: [id])
+  // One-to-one — the database itself prevents a second booking from being
+  // created against the same accepted quote (Stage F §20).
+  quoteId  String? @unique
+  quote    Quote?  @relation(fields: [quoteId], references: [id])
+
+  // Snapshot of the agreed commercial state at booking time — duplicated
+  // from Event/Quote on purpose, not read live, so later edits to the
+  // service catalogue, Event, or Quote can't retroactively change what was
+  // actually agreed (Stage F §7, §13). See BookingService below for the
+  // line-item equivalent.
+  acceptedQuoteVersion Int?
+  eventDate            DateTime?
+  location             String?
+  estimatedGuests      Int?
+  weddingTypeId        String?
+  weddingType          WeddingType? @relation(fields: [weddingTypeId], references: [id])
+  agreedTotal          Decimal?
+  currency             String?
+
+  // "Planning Information" placeholder (§9) — tasks/timeline/vendors/
+  // documents are a future stage; just two note fields for now.
+  planningNotes String?
+  internalNotes String?
+
+  // Free text ("admin") — no multi-admin identity system exists yet, same
+  // placeholder pattern used for QuoteRevision.changedBy.
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  services      BookingService[]
+  statusHistory BookingStatusHistory[]
+  payments      Payment[]
+  invoices      Invoice[]
+
+  // Stage J — Event Planning & Collaboration. Named to not collide with the
+  // free-text planningNotes/internalNotes columns above (Stage F), which
+  // stay untouched.
+  timelineItems         EventTimelineItem[]
+  tasks                 Task[]
+  vendorRecommendations BookingVendorRecommendation[]
+  planningNoteEntries   PlanningNote[]
+  planningRequests      PlanningRequest[]
+
+  // Stage P — added after a production-readiness audit found these exact
+  // columns queried without a supporting index by the admin bookings list
+  // (status, createdAt), the same-date warning check and Stage O's upcoming-
+  // events report (eventDate + status), and Stage O's financial report
+  // (createdAt + status), all hit on every page load/report render.
+  @@index([status])
+  @@index([eventDate])
+  @@index([createdAt])
+}
+
+model BookingService {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id])
+  description String
+  quantity    Int?     @default(1)
+  unit        String?
+  unitPrice   Decimal?
+  total       Decimal?
+  sortOrder   Int      @default(0)
+}
+
+model BookingStatusHistory {
+  id             String         @id @default(cuid())
+  bookingId      String
+  booking        Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  previousStatus BookingStatus?
+  newStatus      BookingStatus
+  changedBy      String?
+  note           String?
+  createdAt      DateTime       @default(now())
+}
+
+enum PaymentType {
+  DEPOSIT
+  PARTIAL
+  FINAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  bookingId   String
+  booking     Booking       @relation(fields: [bookingId], references: [id])
+  // Stage N — set only for online (Flutterwave) payments, tying the ledger
+  // entry to the specific invoice the client paid. Existing manual payments
+  // stay null (booking-level only), exactly as before this stage.
+  invoiceId   String?
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id])
+  // Free text ("Bank Transfer", "Mobile Money", "Cash"...) — examples only,
+  // never presented as confirmed Moira Events payment methods until the
+  // owner confirms them (Stage G §5). Same for `type` below (§6).
+  type        PaymentType?
+  amount      Decimal
+  currency    String?
+  method      String?
+  reference   String?
+  status      PaymentStatus @default(PENDING)
+  // A payment can have a recorded date while still PENDING/PROCESSING, not
+  // only once confirmed PAID — renamed from the placeholder's `paidAt`.
+  paymentDate DateTime?
+  notes       String?
+
+  // Refund architecture only (§10) — never auto-calculated or auto-applied;
+  // admin enters these manually when setting REFUNDED/PARTIALLY_REFUNDED.
+  refundAmount    Decimal?
+  refundDate      DateTime?
+  refundReference String?
+  refundReason    String?
+
+  // Gateway-readiness (§22–§24), now wired up in Stage N.
+  // providerTransactionId is the idempotency key a webhook checks.
+  provider              String?
+  providerTransactionId String? @unique
+  providerEventId       String?
+
+  // Free text ("admin"/"system") — no multi-admin identity system exists
+  // yet, same placeholder pattern used elsewhere (QuoteRevision.changedBy,
+  // etc.). Stage N's webhook/return-page writes use "system".
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusHistory PaymentStatusHistory[]
+
+  @@index([bookingId])
+  @@index([invoiceId])
+  @@index([status])
+  @@index([paymentDate])
+  // Stage P — the admin payments list and Stage O's financial report both
+  // order/filter by createdAt without this.
+  @@index([createdAt])
+  @@index([reference])
+  // Stage N also adds two PARTIAL unique indexes not expressible in Prisma's
+  // schema DSL — hand-added directly to the migration SQL, not here:
+  //   Payment_online_reference_key:   UNIQUE(reference)  WHERE provider IS NOT NULL
+  //   Payment_one_inflight_per_invoice: UNIQUE(invoiceId) WHERE status IN ('PENDING','PROCESSING') AND provider IS NOT NULL
+  // A future `prisma migrate diff` run will NOT know about these — preserve
+  // them by hand if the migration history is ever regenerated from scratch.
+}
+
+model PaymentStatusHistory {
+  id             String         @id @default(cuid())
+  paymentId      String
+  payment        Payment        @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  previousStatus PaymentStatus?
+  newStatus      PaymentStatus
+  changedBy      String?
+  note           String?
+  createdAt      DateTime       @default(now())
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  VOID
+  CANCELLED
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  bookingId     String
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(DRAFT)
+
+  issueDate DateTime?
+  dueDate   DateTime?
+  currency  String?
+
+  // Recomputed server-side from line items + discount/tax on every edit —
+  // never a hardcoded rate (Stage H §12), same approach as Quote.
+  subtotal Decimal?
+  discount Decimal?
+  tax      Decimal?
+  total    Decimal?
+
+  // Visible only to Moira Events staff vs. visible to the client on a future
+  // client-facing invoice page — same split already established on Quote.
+  clientNotes   String?
+  internalNotes String?
+  terms         String?
+
+  // Free text ("admin") — no multi-admin identity system exists yet, same
+  // placeholder pattern used elsewhere (QuoteRevision.changedBy, etc.).
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items         InvoiceItem[]
+  statusHistory InvoiceStatusHistory[]
+  // Stage N — only online payments set Payment.invoiceId; existing manual
+  // payments stay booking-scoped (null), unchanged.
+  payments      Payment[]
+
+  // Stage P — added after a production-readiness audit found the admin
+  // invoices list (status, createdAt) and its Booking join (bookingId)
+  // queried without a supporting index.
+  @@index([bookingId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // Traceability only — never read live for pricing. Items are snapshotted
+  // from Booking.services (itself already a frozen snapshot), not from the
+  // live Service catalogue (Stage H §7).
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id])
+  description String
+  quantity    Int?     @default(1)
+  unitPrice   Decimal?
+  lineTotal   Decimal?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model InvoiceStatusHistory {
+  id             String         @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  previousStatus InvoiceStatus?
+  newStatus      InvoiceStatus
+  changedBy      String?
+  note           String?
+  createdAt      DateTime       @default(now())
+}
+
+enum ConsultationMethod {
+  IN_PERSON
+  PHONE
+  WHATSAPP
+  VIDEO_CALL
+}
+
+enum ConsultationStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model Consultation {
+  id              String              @id @default(cuid())
+  referenceNumber String              @unique
+  clientId        String
+  client          Client              @relation(fields: [clientId], references: [id])
+  eventType       EventType?
+  // What the client originally asked for — never overwritten by admin.
+  preferredDate   DateTime?
+  // What admin actually confirmed/rescheduled to — separate from
+  // preferredDate so the original request stays visible (same snapshot
+  // philosophy used for Quote/Booking/Invoice elsewhere in this schema).
+  scheduledDate   DateTime?
+  method          ConsultationMethod?
+  notes           String?
+  status          ConsultationStatus  @default(REQUESTED)
+  createdAt       DateTime            @default(now())
+
+  statusHistory ConsultationStatusHistory[]
+}
+
+model ConsultationStatusHistory {
+  id             String              @id @default(cuid())
+  consultationId String
+  consultation   Consultation        @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  previousStatus ConsultationStatus?
+  newStatus      ConsultationStatus
+  changedBy      String?
+  note           String?
+  createdAt      DateTime            @default(now())
+}
+
+model Communication {
+  id        String   @id @default(cuid())
+  enquiryId String?
+  channel   String?
+  message   String
+  createdAt DateTime @default(now())
+}
+
+// =============================================================================
+// Stage J — Event Planning & Collaboration. All five models below are purely
+// additive operational data hanging off Booking.id — none of them are ever
+// read or written by any commercial calculation (Quote/Booking.agreedTotal/
+// Invoice/Payment totals stay untouched by this stage). No *StatusHistory
+// table per entity (unlike the financial/commercial records in Stages F–H) —
+// createdBy/updatedBy/updatedAt on the row itself is the traceability level
+// for operational planning data; see SETUP.md for the full rationale.
+// =============================================================================
+
+enum EventTimelineStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model EventTimelineItem {
+  id            String              @id @default(cuid())
+  bookingId     String
+  booking       Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  // Carries both date and time-of-day — same naive-timestamp convention as
+  // every other DateTime in this schema (no timezone column introduced).
+  date          DateTime?
+  // Free text, not an enum — staff can type anything; the UI offers
+  // suggestions (Planning/Meeting/Vendor/Venue/Rehearsal/Event Day/Other)
+  // via a <datalist>, not a hard-coded taxonomy (§7).
+  type          String?
+  status        EventTimelineStatus @default(PLANNED)
+  sortOrder     Int                 @default(0)
+  clientVisible Boolean             @default(false)
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([bookingId])
+  @@index([date])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  bookingId     String
+  booking       Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  dueDate       DateTime?
+  // Free text — no staff-identity/user-accounts system exists yet (§13);
+  // designed so a real assignee relation can be added later without
+  // reshaping this field.
+  assignedTo    String?
+  clientVisible Boolean      @default(false)
+  // Set/cleared automatically alongside status by the same action that
+  // changes status — not a separately invented policy.
+  completedAt   DateTime?
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// Moira Events recommends vendors — it does not contract, confirm, pay, or
+// otherwise manage a commercial vendor engagement (explicit business rule).
+// There is deliberately NO status field anywhere in this pair of models: no
+// CONFIRMED/BOOKED/CONTRACTED/PAID, nothing that could imply Moira manages
+// the vendor relationship. A recommendation is just: catalogue entry +
+// optional per-booking service note + visibility flag.
+model VendorRecommendation {
+  id          String   @id @default(cuid())
+  name        String
+  // Free text, not an enum — same rationale as EventTimelineItem.type (§11/§19).
+  category    String?
+  description String?
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  address     String?
+  // Internal only — never returned by any client-facing loader.
+  notes       String?
+  // Archive instead of hard-delete once linked to historical bookings
+  // (§13/§21) — no delete action is built, only this toggle.
+  active      Boolean  @default(true)
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookingRecommendations BookingVendorRecommendation[]
+}
+
+model BookingVendorRecommendation {
+  id                     String               @id @default(cuid())
+  bookingId              String
+  booking                Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vendorRecommendationId String
+  vendorRecommendation   VendorRecommendation @relation(fields: [vendorRecommendationId], references: [id])
+  serviceDescription     String?
+  // Internal only — never returned by any client-facing loader.
+  notes                  String?
+  clientVisible          Boolean              @default(false)
+  createdBy              String?
+  updatedBy              String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@index([bookingId])
+  @@index([vendorRecommendationId])
+}
+
+// Append-only log, same spirit as Communication above — no edit action, only
+// create/delete. Client visibility defaults to false (§21).
+model PlanningNote {
+  id            String   @id @default(cuid())
+  bookingId     String
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  content       String
+  clientVisible Boolean  @default(false)
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+// =============================================================================
+// Stage K — Client Collaboration & Planning Requests. A client request is
+// data, not an instruction: creating/responding-to/resolving one NEVER
+// touches Booking/Quote/Invoice/Payment fields — those only ever change via
+// their own explicit admin actions, same discipline as every other stage.
+// =============================================================================
+
+enum PlanningRequestStatus {
+  OPEN
+  IN_REVIEW
+  RESPONDED
+  RESOLVED
+  CANCELLED
+}
+
+model PlanningRequest {
+  id        String                @id @default(cuid())
+  bookingId String
+  booking   Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client                @relation(fields: [clientId], references: [id])
+  subject   String
+  message   String
+  status    PlanningRequestStatus @default(OPEN)
+  // Reuses TaskPriority (LOW/MEDIUM/HIGH) rather than a duplicate enum.
+  priority  TaskPriority          @default(MEDIUM)
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  messages PlanningRequestMessage[]
+
+  @@index([bookingId])
+  @@index([clientId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+enum PlanningRequestSenderType {
+  CLIENT
+  STAFF
+}
+
+// The request's own subject/message IS the opening thread entry — never
+// duplicated into a row here. This table holds only the back-and-forth that
+// follows.
+model PlanningRequestMessage {
+  id                String                    @id @default(cuid())
+  planningRequestId String
+  planningRequest   PlanningRequest           @relation(fields: [planningRequestId], references: [id], onDelete: Cascade)
+  senderType        PlanningRequestSenderType
+  message           String
+  createdBy         String?
+  createdAt         DateTime                  @default(now())
+
+  @@index([planningRequestId])
+}
+
+// =============================================================================
+// Stage L2 — Email notifications & secure document delivery
+// Tracks exactly the email types that need duplicate-send protection (an
+// admin-triggered resend of a business document). EMAIL_VERIFICATION and
+// PASSWORD_RESET are deliberately NOT tracked here — those already have
+// their own single-use/expiring-token semantics and existing rate-limiting
+// (lib/rate-limit.ts), and their tokens rotate per request by design, so a
+// durable idempotency key would need the same per-render trick for no real
+// benefit. They keep calling sendEmail directly.
+// =============================================================================
+
+enum EmailType {
+  CLIENT_INVITATION
+  QUOTE_ISSUED
+  BOOKING_CONFIRMATION
+  INVOICE_ISSUED
+  PLANNING_RESPONSE
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+// idempotencyKey is the actual duplicate-prevention mechanism (a fresh
+// per-render requestId embedded by the caller) — not the existence check
+// alone, which would be a check-then-act race under a double-click. Callers
+// attempt the create() directly and catch the unique-constraint violation,
+// same pattern already used for quote/invoice/booking reference numbers.
+model EmailDelivery {
+  id                   String              @id @default(cuid())
+  type                 EmailType
+  recipientEmail       String
+  relatedRecordType    String?
+  relatedRecordId      String?
+  relatedRecordVersion Int?
+  idempotencyKey       String              @unique
+  status               EmailDeliveryStatus @default(PENDING)
+  providerMessageId    String?
+  attemptCount         Int                 @default(0)
+  lastError            String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([relatedRecordType, relatedRecordId])
+  @@index([status])
+}
+
+// =============================================================================
+// Stage M — Document registry & audit trail
+// Metadata-only (no PDF bytes stored — Stage L1's on-demand regeneration
+// already works and there's no clear reason to duplicate that here).
+// Never updated/deleted anywhere in the codebase — audit immutability is an
+// APPLICATION-level guarantee only, not enforced by Postgres itself.
+// =============================================================================
+
+enum AuditActorType {
+  ADMIN
+  CLIENT
+  SYSTEM
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+// action/entityType values come from a closed literal-union list
+// (lib/audit/constants.ts), not free text — keeps "filter by action"
+// actually reliable across ~15+ call sites.
+model AuditEvent {
+  id            String         @id @default(cuid())
+  actorType     AuditActorType
+  // "admin" (the one shared staff account — no multi-admin identity system
+  // exists in this app) | a real Client.id | "system".
+  actorId       String
+  action        String
+  entityType    String
+  entityId      String
+  outcome       AuditOutcome
+  // Links to e.g. an EmailDelivery.id, or the related business-record id —
+  // never duplicates that record's own state.
+  correlationId String?
+  // Short, hand-composed by the call site — never a raw pass-through of a
+  // form field (which could carry a payment reference or similar).
+  summary       String
+  // Enum-like status values only (e.g. "DRAFT" -> "ISSUED"), never free text.
+  beforeValue   String?
+  afterValue    String?
+  createdAt     DateTime       @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorType, actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+enum DocumentType {
+  QUOTE
+  INVOICE
+  BOOKING_CONFIRMATION
+}
+
+// No `status` field this stage: every PDF route is a synchronous
+// render-then-respond in one request, so there is no code path that
+// produces a "generated but not yet downloaded" state — GENERATED vs
+// DOWNLOADED would always be the same value. Will be reintroduced
+// (STORED/STORAGE_FAILED) once Phase-C-style persistent storage actually
+// makes generation and retrieval separate moments.
+model DocumentRecord {
+  id              String         @id @default(cuid())
+  type            DocumentType
+  relatedRecordId String
+  // The quote/invoice/booking's own MQ-/MI-/MB- number, duplicated here for
+  // fast lookup without a join.
+  referenceNumber String
+  version         Int?
+  filename        String
+  mimeType        String         @default("application/pdf")
+  // Always computed from the already-rendered buffer at zero extra cost —
+  // the one piece of real forensic value a metadata-only registry offers.
+  fileSizeBytes   Int
+  checksumSha256  String
+  // Null until a real persistent storage provider is configured (Phase C
+  // of this stage only defines the seam, lib/documents/storage.ts).
+  storageProvider String?
+  storageKey      String?
+  actorType       AuditActorType
+  actorId         String
+  createdAt       DateTime       @default(now())
+
+  @@index([type, relatedRecordId])
+  @@index([createdAt])
+}

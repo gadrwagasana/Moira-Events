@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* Placeholder brand palette derived from the Moira Events logo (warm espresso
+   + ivory). Replace with official brand guideline colors once the owner
+   confirms them (sitemap §12 "Brand Strategy" — currently TBD). */
+@theme {
+  --color-espresso-50: #f7f3f1;
+  --color-espresso-100: #ede2dc;
+  --color-espresso-200: #d9c1b5;
+  --color-espresso-300: #c29e8c;
+  --color-espresso-400: #a47862;
+  --color-espresso-500: #815c49;
+  --color-espresso-600: #5c4033;
+  --color-espresso-700: #49332a;
+  --color-espresso-800: #362620;
+  --color-espresso-900: #241a16;
+  --color-espresso: #5c4033;
+
+  --color-ivory-50: #ffffff;
+  --color-ivory-100: #fbf9f6;
+  --color-ivory-200: #f5f1eb;
+  --color-ivory-300: #ebe3d7;
+  /* Sampled directly from the official logo file's own canvas (pixel-exact,
+     not an approximation) — used for the header/footer "frame" so the logo
+     sits on the same tone it was designed against. */
+  --color-ivory-400: #e6e4e1;
+  --color-ivory: #f5f1eb;
+
+  --color-ink: #241f1c;
+
+  --font-serif: var(--font-display), Georgia, serif;
+  --font-sans: var(--font-body), system-ui, sans-serif;
+
+  /* Espresso-tinted shadows (not neutral black) so elevation reads as warm,
+     not generic. Scale mirrors Tailwind's sm/md/lg naming. */
+  --shadow-color: 36 26 22;
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-color) / 0.04), 0 1px 1px rgb(var(--shadow-color) / 0.03);
+  --shadow-md: 0 4px 12px rgb(var(--shadow-color) / 0.06), 0 2px 4px rgb(var(--shadow-color) / 0.04);
+  --shadow-lg: 0 16px 40px rgb(var(--shadow-color) / 0.10), 0 4px 10px rgb(var(--shadow-color) / 0.05);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ivory-100 text-ink antialiased;
+}
+
+@utility max-w-content {
+  max-width: 1200px;
+}
+
+@utility section {
+  @apply mx-auto max-w-content px-6 py-16 md:py-24;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center whitespace-nowrap rounded-full px-7 py-3 text-sm font-medium tracking-wide transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-espresso-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ivory-100 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+/* Shared elevation treatment for clickable cards (division cards, portfolio
+   tiles, etc.) — rest state is barely-there, hover lifts and deepens the
+   shadow. motion-reduce guards disable the transform, not the shadow, so
+   the state change is still perceivable without motion. */
+@utility card-interactive {
+  @apply rounded-2xl border border-espresso-100 bg-ivory-50 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:border-espresso-200 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0;
+}
+
+@utility btn-primary {
+  @apply btn bg-espresso-600 text-ivory-100 hover:bg-espresso-700;
+}
+
+@utility btn-secondary {
+  @apply btn border border-espresso-600 text-espresso-600 hover:bg-espresso-600 hover:text-ivory-100;
+}
+
+@utility label-eyebrow {
+  @apply text-xs font-semibold uppercase tracking-[0.2em] text-espresso-500;
+}
+
+@utility field-label {
+  @apply mb-1 block text-sm font-medium text-ink;
+}
+
+@utility field-input {
+  @apply w-full rounded-lg border border-espresso-200 bg-ivory-50 px-4 py-2.5 text-sm text-ink placeholder:text-espresso-300 transition-colors duration-150 focus:border-espresso-500 focus:outline-none focus:ring-1 focus:ring-espresso-500 aria-invalid:border-red-400 aria-invalid:focus:border-red-500 aria-invalid:focus:ring-red-500;
+}
+
+@utility field-error {
+  @apply mt-1.5 text-xs text-red-600;
+}
+
+@utility form-error-banner {
+  @apply rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700;
+}

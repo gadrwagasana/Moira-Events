@@ -1,0 +1,19 @@
+node_modules
+.next
+out
+.env
+.env*.local
+*.log
+
+/lib/generated/prisma
+
+# Dev-mode email preview output (lib/email/send.ts) — contains real
+# activation/reset token values from local testing, never meant to be
+# version-controlled.
+.local-emails/
+
+# AI coding-assistant skill caches (auto-regenerated tool docs, not
+# application source).
+.agents/
+.claude/
+.windsurf/
