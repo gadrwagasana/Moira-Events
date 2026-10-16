@@ -55,11 +55,13 @@ export function GeneralEnquiryForm({
         <dl className="mx-auto mt-6 max-w-sm space-y-2 text-left text-sm text-ink/80">
           <div className="flex justify-between gap-4">
             <dt className="font-medium">Reference Number</dt>
-            <dd>{state.referenceNumber}</dd>
+            <dd className="min-w-0 break-words text-right">{state.referenceNumber}</dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="font-medium">Submitted</dt>
-            <dd>{state.submittedAt ? new Date(state.submittedAt).toLocaleString() : "—"}</dd>
+            <dd className="min-w-0 break-words text-right">
+              {state.submittedAt ? new Date(state.submittedAt).toLocaleString() : "—"}
+            </dd>
           </div>
         </dl>
         <p className="mt-6 text-xs text-ink/50">

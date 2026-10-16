@@ -62,7 +62,7 @@ export default function HomePage() {
               We Take the Stress Out of Event Planning
             </h2>
             <p className="mt-5 text-lg italic text-espresso-600">&ldquo;{differentiator}&rdquo;</p>
-            <ul className="mt-6 grid grid-cols-2 gap-3 text-sm text-ink/70">
+            <ul className="mt-6 grid grid-cols-1 gap-3 text-sm text-ink/70 sm:grid-cols-2">
               {["Trusted vendors", "Smooth planning", "Seamless execution", "Attention to detail", "Professional coordination", "Stress-free experience"].map(
                 (item) => (
                   <li key={item} className="flex items-center gap-2">

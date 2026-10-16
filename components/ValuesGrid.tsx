@@ -2,7 +2,7 @@ import { values } from "@/lib/content/company";
 
 export function ValuesGrid() {
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {values.map((value, i) => (
         <div key={value.name} className="rounded-xl border border-espresso-100 bg-ivory-50 p-6 text-center shadow-sm">
           <span className="font-serif text-2xl text-espresso-300">{String(i + 1).padStart(2, "0")}</span>

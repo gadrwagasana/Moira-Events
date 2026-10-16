@@ -40,7 +40,7 @@ export default async function WeddingsPage() {
       <section className="section grid gap-12 lg:grid-cols-2">
         <div>
           <h2 className="font-serif text-2xl text-espresso-700">Wedding Types</h2>
-          <ul className="mt-5 grid grid-cols-2 gap-3">
+          <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {weddingTypes.map((wt) => (
               <li key={wt.id} className="rounded-lg border border-espresso-100 bg-ivory-50 px-4 py-3 text-sm text-ink/80">
                 {wt.name}

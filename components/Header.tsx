@@ -31,7 +31,12 @@ export function Header() {
           <Logo className="h-12 w-auto" />
         </Link>
 
-        <nav className="hidden items-center gap-6 lg:flex">
+        {/* Desktop nav switches on at xl (1280px), not the more common lg
+            (1024px): logo + 7 nav items + Client Login + a CTA button all in
+            one row genuinely doesn't have room at 1024px — tablet-landscape
+            and small-laptop widths get the mobile hamburger menu instead,
+            which has plenty of room (responsive design audit finding). */}
+        <nav className="hidden items-center gap-6 xl:flex">
           {primaryNav.map((item) => {
             const active =
               pathname === item.href || (item.children?.some((c) => c.href === pathname) ?? false);
@@ -103,7 +108,7 @@ export function Header() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-4 lg:flex">
+        <div className="hidden items-center gap-4 xl:flex">
           <Link
             href="/portal/login"
             className="whitespace-nowrap rounded-sm text-sm font-medium text-ink/70 transition-colors hover:text-espresso-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-espresso-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ivory-400"
@@ -117,7 +122,7 @@ export function Header() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-espresso-200 text-espresso-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-espresso-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ivory-400 lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-espresso-200 text-espresso-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-espresso-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ivory-400 xl:hidden"
           aria-label="Toggle navigation menu"
           aria-expanded={open}
           onClick={() => (open ? closeMobileMenu() : setOpen(true))}
@@ -140,7 +145,7 @@ export function Header() {
           keyboard/AT users can't land on hidden links (React 19 supports
           `inert` as a plain DOM prop). */}
       <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out lg:hidden ${
+        className={`grid transition-[grid-template-rows] duration-300 ease-out xl:hidden ${
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
         inert={!open}

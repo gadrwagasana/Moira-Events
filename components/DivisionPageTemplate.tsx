@@ -28,7 +28,7 @@ export function DivisionPageTemplate({
       <section className="section grid gap-12 lg:grid-cols-2">
         <div>
           <h2 className="font-serif text-2xl text-espresso-700">{division.categoriesLabel}</h2>
-          <ul className="mt-5 grid grid-cols-2 gap-3">
+          <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {division.categories.map((category) => (
               <li
                 key={category}
