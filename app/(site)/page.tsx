@@ -31,7 +31,20 @@ export default async function HomePage() {
           as before; CmsImage's own placeholder/fallback still applies when
           no photo has been set yet in Admin → Site Images). */}
       <section className="relative isolate overflow-hidden border-b border-espresso-100">
-        <CmsImage slot={slots["home-hero"]} priority className="absolute inset-0" />
+        {/* Wrapped rather than passing "absolute inset-0" straight into
+            CmsImage's className: CmsImage's own root div is hardcoded
+            `relative`, and in the compiled Tailwind output `.relative`
+            sits after `.absolute`, so `position: relative` wins and an
+            "absolute" class passed in here has no effect — the wrapper's
+            height then collapses to 0 and the fill image inside renders
+            invisibly. Giving CmsImage a sized, absolutely-positioned
+            parent instead sidesteps the conflict without changing the
+            shared component (every other CmsImage call site passes only
+            sizing classes, never a position utility, so this is the only
+            place the conflict exists). */}
+        <div className="absolute inset-0">
+          <CmsImage slot={slots["home-hero"]} priority className="h-full" />
+        </div>
         <div className="absolute inset-0 bg-espresso-900/60" />
         <div className="section relative py-24 text-center md:py-32 lg:py-40">
           <div className="mx-auto max-w-3xl">
