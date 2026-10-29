@@ -13,6 +13,46 @@ export type ImageFieldValue = {
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+// Vercel's serverless functions cap request body size at roughly 4.5MB —
+// a hard platform limit this app's own code can't raise. Phone/DSLR
+// photos routinely exceed that long before they hit the 15MB picker
+// limit above, so every upload is pre-resized client-side (mirroring
+// lib/media/process.ts's own MAX_STORED_WIDTH/WebP pipeline) before it's
+// ever sent to the server — the server-side pipeline still runs on top
+// of this smaller file unchanged, this just keeps the request itself
+// under the platform's cap. 4MB leaves headroom under the ~4.5MB cap for
+// multipart/form-data overhead.
+const RESIZE_MAX_DIMENSION = 2400;
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+
+// Animated GIFs are deliberately left untouched — canvas-based resizing
+// flattens an animated image to a single static frame, which would be a
+// real regression, not a compression. They still go through the original
+// size check below unresized.
+async function resizeForUpload(file: File): Promise<File> {
+  if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, RESIZE_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
+    if (!blob) return file;
+    // Only swap in the resized version if it's actually smaller — a
+    // small, already-simple source image can occasionally re-encode
+    // larger than it started.
+    if (blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".webp", { type: "image/webp" });
+  } catch {
+    // Decoding failed (corrupt file, an unsupported variant) — fall back
+    // to the original file rather than blocking the upload entirely.
+    return file;
+  }
+}
 
 // The one shared building block for every image field in the admin (Site
 // Images, Portfolio, blog cover, page OG image) — drag-and-drop + a file
@@ -46,7 +86,7 @@ export function ImageUploadField({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function uploadFile(file: File) {
+  async function uploadFile(file: File) {
     setError(null);
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError("Unsupported file type — use JPG, PNG, WebP, or AVIF.");
@@ -57,8 +97,14 @@ export function ImageUploadField({
       return;
     }
 
+    const toSend = await resizeForUpload(file);
+    if (toSend.size > MAX_REQUEST_BYTES) {
+      setError("This photo is too large to upload even after compressing — try a smaller or simpler image.");
+      return;
+    }
+
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", toSend);
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/admin/media/upload");
