@@ -2,6 +2,8 @@ export type Division = {
   slug: "weddings" | "parties-social-events" | "corporate-events";
   name: string;
   shortName: string;
+  // Division images are CMS-managed slots now (lib/site-images), keyed off
+  // this slug via divisionHeroSlotKey/divisionTeamSlotKey — not stored here.
   heroTitle: string;
   heroSupport: string;
   summary: string;

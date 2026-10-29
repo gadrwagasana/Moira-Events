@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getInvoicesList } from "@/lib/invoices/data";
 import { computePaymentSummary } from "@/lib/payments/totals";
 import { InvoiceStatus } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Invoices — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function AdminInvoicesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

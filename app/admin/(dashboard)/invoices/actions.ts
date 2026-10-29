@@ -21,6 +21,7 @@ import { sendTrackedEmail, type SendEmailFormState } from "@/lib/email/outbox";
 import { isInvoiceSendable } from "@/lib/invoices/send-guard";
 import { auditEventQuery, recordAuditEvent } from "@/lib/audit/log";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -43,6 +44,7 @@ async function recalcInvoiceTotals(invoiceId: string, tx: Prisma.TransactionClie
 // Service catalogue (Stage H §7). Multiple invoices per booking are allowed
 // (§9), so this is never gated the way Booking's "Create Booking" was.
 export async function createInvoiceFromBooking(bookingId: string) {
+  await requireAdminRole("ADMIN");
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: { services: true },
@@ -112,6 +114,7 @@ const detailsSchema = z.object({
 // rewritten; re-checked here even though the UI only renders this form for
 // DRAFT invoices.
 export async function updateInvoiceDetails(invoiceId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return;
 
@@ -157,6 +160,7 @@ const addItemSchema = z
   });
 
 export async function addInvoiceItem(invoiceId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return;
 
@@ -207,6 +211,7 @@ const updateItemSchema = z.object({
 });
 
 export async function updateInvoiceItem(itemId: string, invoiceId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return;
 
@@ -229,6 +234,7 @@ export async function updateInvoiceItem(itemId: string, invoiceId: string, formD
 }
 
 export async function deleteInvoiceItem(itemId: string, invoiceId: string) {
+  await requireAdminRole("ADMIN");
   const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
   if (invoice.status !== "DRAFT") return;
 
@@ -247,6 +253,7 @@ const statusSchema = z.object({
 });
 
 export async function updateInvoiceStatus(invoiceId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -291,6 +298,7 @@ export async function sendInvoiceEmail(
   _prevState: SendEmailFormState,
   formData: FormData,
 ): Promise<SendEmailFormState> {
+  await requireAdminRole("ADMIN");
   const requestId = String(formData.get("requestId") ?? "");
   if (!requestId) return { status: "error", message: "Missing request id — please reload the page and try again." };
 

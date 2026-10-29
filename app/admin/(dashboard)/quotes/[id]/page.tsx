@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { createBookingFromQuote } from "../../bookings/actions";
 import { SendQuoteButton } from "./SendQuoteButton";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Quote Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ function dateInputValue(d: Date | null | undefined) {
 }
 
 export default async function AdminQuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const quote = await getQuoteDetail(id);
   if (!quote) notFound();
@@ -342,6 +344,26 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
             directly (WhatsApp/phone/email).
           </p>
         </form>
+
+        {(quote.acceptedAt || quote.declinedAt || quote.revisionRequestedAt) && (
+          <div className="mt-4 space-y-1 border-t border-espresso-100 pt-4 text-sm">
+            {quote.acceptedAt && (
+              <Row label="Accepted" value={`${quote.acceptedAt.toLocaleString()}${quote.acceptedBy ? ` by ${quote.acceptedBy}` : ""}`} />
+            )}
+            {quote.declinedAt && (
+              <>
+                <Row label="Declined" value={`${quote.declinedAt.toLocaleString()}${quote.declinedBy ? ` by ${quote.declinedBy}` : ""}`} />
+                {quote.declineReason && <Row label="Decline Reason" value={quote.declineReason} />}
+              </>
+            )}
+            {quote.revisionRequestedAt && (
+              <>
+                <Row label="Revision Requested" value={quote.revisionRequestedAt.toLocaleString()} />
+                {quote.revisionRequestNote && <Row label="Revision Note" value={quote.revisionRequestNote} />}
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Revision history */}

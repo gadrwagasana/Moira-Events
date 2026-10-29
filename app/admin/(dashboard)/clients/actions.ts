@@ -6,14 +6,14 @@ import { prisma } from "@/lib/db";
 import { generateToken, hashToken } from "@/lib/client-portal/tokens";
 import { invitationEmail } from "@/lib/email/templates";
 import { sendTrackedEmail } from "@/lib/email/outbox";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — technical parameter, not business policy
 
-// Admin-side only — protected the same way every other admin action in this
-// codebase is, by proxy.ts gating the /admin/:path* page this form is
-// rendered on. The resulting link is ALSO shown to admin to copy/send
-// manually — kept as a fallback in case email delivery fails, not replaced
-// by it (Stage L2).
+// Admin-side only — requireAdminRole("ADMIN") below (CMS Phase 2) gates this
+// directly, on top of proxy.ts's page-level check. The resulting link is
+// ALSO shown to admin to copy/send manually — kept as a fallback in case
+// email delivery fails, not replaced by it (Stage L2).
 //
 // The token is hashed at rest (Stage K.5 §8/§11) — the raw value only ever
 // exists here, transiently, and is carried back to the booking page via a
@@ -30,6 +30,7 @@ const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — technical parame
 // changing invite-generation semantics (e.g. not rotating an unexpired
 // token), which is a K.5-era concern out of scope for an email stage.
 export async function generateClientPortalInvite(clientId: string, bookingId: string) {
+  await requireAdminRole("ADMIN");
   const rawToken = generateToken();
   const inviteTokenExpiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
 

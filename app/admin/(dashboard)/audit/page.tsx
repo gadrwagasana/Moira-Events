@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getAuditEventsList } from "@/lib/audit/data";
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "@/lib/audit/constants";
 import { AuditActorType } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Audit Log — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export default async function AdminAuditPage({
 }: {
   searchParams: Promise<{ entityType?: string; action?: string; actorType?: string; entityId?: string; from?: string; to?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const entityType = params.entityType ?? "";
   const action = params.action ?? "";
@@ -86,7 +88,7 @@ export default async function AdminAuditPage({
         <p className="text-sm text-ink/60">No audit events match.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-espresso-100">
-          <table className="w-full min-w-[920px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="bg-ivory-200 text-xs uppercase tracking-wide text-ink/60">
               <tr>
                 <th className="px-4 py-3">When</th>
@@ -95,6 +97,8 @@ export default async function AdminAuditPage({
                 <th className="px-4 py-3">Entity</th>
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Summary</th>
+                <th className="px-4 py-3">Change</th>
+                <th className="px-4 py-3">Correlation</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-espresso-100">
@@ -118,6 +122,14 @@ export default async function AdminAuditPage({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink/80">{event.summary}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-ink/60">
+                    {event.beforeValue || event.afterValue
+                      ? `${event.beforeValue ?? "—"} → ${event.afterValue ?? "—"}`
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-ink/50" title={event.correlationId ?? undefined}>
+                    {event.correlationId ? `${event.correlationId.slice(0, 10)}…` : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

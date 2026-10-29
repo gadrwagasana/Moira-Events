@@ -1,21 +1,24 @@
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { QuoteStatus, Prisma } from "@/lib/generated/prisma/client";
 
 export async function getQuoteDetail(id: string) {
-  return prisma.quote.findUnique({
-    where: { id },
-    include: {
-      enquiry: {
-        include: {
-          client: true,
-          event: { include: { weddingType: true } },
+  return withDbRetry(() =>
+    prisma.quote.findUnique({
+      where: { id },
+      include: {
+        enquiry: {
+          include: {
+            client: true,
+            event: { include: { weddingType: true } },
+          },
         },
+        items: { orderBy: { sortOrder: "asc" }, include: { service: true } },
+        revisions: { orderBy: { createdAt: "desc" } },
+        booking: true,
       },
-      items: { orderBy: { sortOrder: "asc" }, include: { service: true } },
-      revisions: { orderBy: { createdAt: "desc" } },
-      booking: true,
-    },
-  });
+    }),
+  );
 }
 
 export async function getQuotesList(filters: { q?: string; status?: string }) {

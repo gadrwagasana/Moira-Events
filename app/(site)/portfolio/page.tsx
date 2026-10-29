@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHero } from "@/components/PageHero";
-import { PlaceholderImage } from "@/components/PlaceholderImage";
+import { CmsImage } from "@/components/CmsImage";
 import { CTAButtons } from "@/components/CTAButtons";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PortfolioGallery } from "@/components/PortfolioGallery";
 import { divisions } from "@/lib/content/divisions";
+import { listPublishedPortfolioItems, getAllSiteImageSlots } from "@/lib/site-images/data";
+import { divisionHeroSlotKey } from "@/lib/site-images/slots";
 
 export const metadata: Metadata = {
   title: "Portfolio",
@@ -12,41 +15,67 @@ export const metadata: Metadata = {
   alternates: { canonical: "/portfolio" },
 };
 
-// No real project photography or case studies exist yet (confirmed — every
-// image area on this site is still a styled placeholder pending the owner
-// supplying real photography). Rather than show an empty gallery or invent
-// project details, this page honestly previews what each division covers
-// and routes to the real, already-built division pages for detail — no
-// fabricated projects, clients, or images.
-export default function PortfolioPage() {
+export const dynamic = "force-dynamic";
+
+export default async function PortfolioPage() {
+  const [items, slots] = await Promise.all([listPublishedPortfolioItems(), getAllSiteImageSlots()]);
+
   return (
     <>
       <Breadcrumbs items={[{ label: "Portfolio", href: "/portfolio" }]} />
       <PageHero
         eyebrow="Our Work"
         title="Portfolio"
-        support="Real photography from past events is coming soon. In the meantime, here's what Moira Events plans across each division — and the detail behind every one of them."
+        support="A look at real events Moira Events has planned — filter by type, or explore what each division offers below."
       />
-      <section className="section grid gap-8 md:grid-cols-3">
-        {divisions.map((division) => (
-          <div key={division.slug} className="card-interactive flex flex-col overflow-hidden">
-            <PlaceholderImage label={division.shortName} className="aspect-[16/10] rounded-none" />
-            <div className="flex flex-1 flex-col p-6">
-              <h2 className="font-serif text-xl text-espresso-700">{division.name}</h2>
-              <p className="mt-2 flex-1 text-sm text-ink/70">{division.summary}</p>
-              <Link
-                href={`/${division.slug}`}
-                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-espresso-600 hover:text-espresso-700"
-              >
-                See {division.shortName} in detail
-                <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-          </div>
-        ))}
+
+      <section className="section">
+        <PortfolioGallery
+          items={items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            eventType: item.eventType as "WEDDING" | "PARTY" | "CORPORATE",
+            guestCount: item.guestCount,
+            venueOrCity: item.venueOrCity,
+            story: item.story,
+            imageUrl: item.imageUrl,
+            alt: item.alt,
+          }))}
+        />
       </section>
+
+      <section className="bg-ivory-200">
+        <div className="section">
+          <div className="mb-10 text-center md:mb-12">
+            <p className="label-eyebrow mb-3">What We Offer</p>
+            <h2 className="font-serif text-3xl text-espresso-700">Explore by Division</h2>
+          </div>
+          <div className="grid gap-8 md:grid-cols-3">
+            {divisions.map((division) => (
+              <div key={division.slug} className="card-interactive group relative flex flex-col overflow-hidden">
+                <CmsImage
+                  slot={slots[divisionHeroSlotKey(division.slug)]}
+                  nearbyHeading={division.name}
+                  className="aspect-[16/10]"
+                />
+                <div className="flex flex-1 flex-col p-6">
+                  <h3 className="font-serif text-xl text-espresso-700">{division.name}</h3>
+                  <p className="mt-2 flex-1 text-sm text-ink-muted">{division.summary}</p>
+                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-espresso-600 group-hover:text-espresso-700">
+                    <Link href={`/${division.slug}`} className="stretched-link focus-ring rounded">
+                      See {division.shortName} in detail
+                    </Link>
+                    <span aria-hidden="true">→</span>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="section max-w-2xl text-center">
-        <p className="text-lg text-ink/70">
+        <p className="text-lg text-ink-muted">
           Every event is shaped around your vision, your guests, and the moments that matter most.
         </p>
         <CTAButtons className="mt-8 justify-center" />

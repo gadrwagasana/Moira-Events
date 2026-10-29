@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getVendorsList } from "@/lib/vendors/data";
 import { createVendor } from "./actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Vendor Recommendations — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function AdminVendorsPage({
 }: {
   searchParams: Promise<{ q?: string; category?: string; active?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const category = params.category ?? "";

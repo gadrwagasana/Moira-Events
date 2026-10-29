@@ -5,6 +5,8 @@ import { TrackedLink } from "@/components/TrackedLink";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Faq } from "@/components/Faq";
 import { siteConfig } from "@/lib/content/config";
+import { getSiteSettings } from "@/lib/settings/data";
+import { formatE164Phone } from "@/lib/settings/format";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -12,10 +14,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contact" },
 };
 
-// Every answer here restates a fact already established elsewhere in this
-// app (pricing/process copy on Services & How It Works, the live-scheduling
-// caveat already shown on the consultation form, the confirmed service
-// area) — nothing new is claimed here that isn't already true on the site.
+// TODO (next pass): the Faq collection (lib/settings's sibling Faq model,
+// migration applied, admin UI not yet built) is meant to replace this
+// hardcoded list per the ticket's item 5 — not done in this pass, which
+// focused on Site Settings itself. Every answer here still only restates a
+// fact already established elsewhere in this app — nothing new claimed.
 const faqItems = [
   {
     question: "Do you have fixed packages or published pricing?",
@@ -34,12 +37,13 @@ const faqItems = [
   },
   {
     question: "Where is Moira Events based, and who do you work with?",
-    answer:
-      `Moira Events is based in ${siteConfig.country} and plans weddings, parties & social events, and corporate events for clients there.`,
+    answer: `Moira Events is based in ${siteConfig.country} and plans weddings, parties & social events, and corporate events for clients there.`,
   },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const settings = await getSiteSettings();
+
   return (
     <>
       <Breadcrumbs items={[{ label: "Contact", href: "/contact" }]} />
@@ -47,39 +51,59 @@ export default function ContactPage() {
 
       <section className="section grid gap-12 lg:grid-cols-2">
         <div className="space-y-6">
-          <div>
-            <h2 className="font-serif text-xl text-espresso-700">Email</h2>
-            <TrackedLink
-              eventName="email_contact_click"
-              eventProps={{ location: "contact_page" }}
-              href={`mailto:${siteConfig.email}`}
-              className="text-ink/70 hover:text-espresso-600"
-            >
-              {siteConfig.email}
-            </TrackedLink>
-          </div>
-          <div>
-            <h2 className="font-serif text-xl text-espresso-700">Phone</h2>
-            <a href={`tel:${siteConfig.phone}`} className="text-ink/70 hover:text-espresso-600">
-              {siteConfig.phone}
-            </a>
-          </div>
-          <div>
-            <h2 className="font-serif text-xl text-espresso-700">WhatsApp</h2>
-            <TrackedLink
-              eventName="whatsapp_contact_click"
-              eventProps={{ location: "contact_page" }}
-              href={`https://wa.me/${siteConfig.whatsappNumber}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-ink/70 hover:text-espresso-600"
-            >
-              Chat with us on WhatsApp
-            </TrackedLink>
-          </div>
+          {settings.contactEmail && (
+            <div>
+              <h2 className="font-serif text-xl text-espresso-700">Email</h2>
+              <TrackedLink
+                eventName="email_contact_click"
+                eventProps={{ location: "contact_page" }}
+                href={`mailto:${settings.contactEmail}`}
+                className="text-ink-muted hover:text-espresso-600"
+              >
+                {settings.contactEmail}
+              </TrackedLink>
+            </div>
+          )}
+          {settings.phoneE164 && (
+            <div>
+              <h2 className="font-serif text-xl text-espresso-700">Phone</h2>
+              <a href={`tel:${settings.phoneE164}`} className="text-ink-muted hover:text-espresso-600">
+                {formatE164Phone(settings.phoneE164)}
+              </a>
+            </div>
+          )}
+          {settings.whatsappNumber && (
+            <div>
+              <h2 className="font-serif text-xl text-espresso-700">WhatsApp</h2>
+              <TrackedLink
+                eventName="whatsapp_contact_click"
+                eventProps={{ location: "contact_page" }}
+                href={`https://wa.me/${settings.whatsappNumber}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-ink-muted hover:text-espresso-600"
+              >
+                Chat with us on WhatsApp
+              </TrackedLink>
+            </div>
+          )}
           <div>
             <h2 className="font-serif text-xl text-espresso-700">Location</h2>
-            <p className="text-ink/70">{siteConfig.country}</p>
+            <p className="text-ink-muted">
+              {settings.addressLine && <>{settings.addressLine}, </>}
+              {settings.city || siteConfig.country}
+            </p>
+            {settings.openingHours && <p className="mt-1 whitespace-pre-line text-sm text-ink-muted">{settings.openingHours}</p>}
+            {settings.googleMapsUrl && (
+              <a
+                href={settings.googleMapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block text-sm text-espresso-600 hover:underline"
+              >
+                View on Google Maps
+              </a>
+            )}
           </div>
         </div>
 

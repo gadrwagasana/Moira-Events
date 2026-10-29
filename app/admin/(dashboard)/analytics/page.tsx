@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getFunnelReport } from "@/lib/analytics/funnel";
 import { getFinancialReport } from "@/lib/analytics/financial";
 import { getUpcomingEvents, getPlanningRequestAges, getRecentActivity } from "@/lib/analytics/operational";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Analytics — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -26,17 +27,23 @@ export default async function AdminAnalyticsOverviewPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const from = params.from ?? "";
   const to = params.to ?? "";
 
-  const [funnel, financial, upcomingEvents, planningAges, recentActivity] = await Promise.all([
-    getFunnelReport({ from, to }),
-    getFinancialReport({ from, to }),
-    getUpcomingEvents(60),
-    getPlanningRequestAges(),
-    getRecentActivity(15),
-  ]);
+  // Sequential, not Promise.all — this page is the heaviest aggregator in
+  // the admin (funnel + financial reports alone fire 11 queries between
+  // them); running all five report calls at once was exactly the kind of
+  // concurrent-connection burst that triggers "Server has closed the
+  // connection" against a constrained pool. Each underlying query already
+  // retries transient failures on its own (see lib/analytics/funnel.ts and
+  // lib/analytics/financial.ts), so this just avoids piling them up at once.
+  const funnel = await getFunnelReport({ from, to });
+  const financial = await getFinancialReport({ from, to });
+  const upcomingEvents = await getUpcomingEvents(60);
+  const planningAges = await getPlanningRequestAges();
+  const recentActivity = await getRecentActivity(15);
 
   const query = new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString();
   const withQuery = (path: string) => `${path}${query ? `?${query}` : ""}`;

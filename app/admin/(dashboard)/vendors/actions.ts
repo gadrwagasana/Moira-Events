@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -20,6 +21,7 @@ const vendorSchema = z.object({
 });
 
 export async function createVendor(formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = vendorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -30,6 +32,7 @@ export async function createVendor(formData: FormData) {
 }
 
 export async function updateVendor(vendorId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = vendorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -42,6 +45,7 @@ export async function updateVendor(vendorId: string, formData: FormData) {
 // Archive/reactivate only — a recommendation is never hard-deleted once it
 // may be linked to historical bookings (§13/§21).
 export async function setVendorActive(vendorId: string, active: boolean) {
+  await requireAdminRole("ADMIN");
   await prisma.vendorRecommendation.update({ where: { id: vendorId }, data: { active, updatedBy: "admin" } });
 
   revalidatePath(`/admin/vendors/${vendorId}`);

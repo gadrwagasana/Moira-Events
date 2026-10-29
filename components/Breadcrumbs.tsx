@@ -24,7 +24,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <nav aria-label="Breadcrumb" className="section pb-0 pt-6 text-sm text-ink/60">
+      <nav aria-label="Breadcrumb" className="section pb-0 pt-6 text-sm text-ink-muted">
         <ol className="flex flex-wrap items-center gap-1">
           {trail.map((crumb, index) => (
             <li key={crumb.href} className="flex items-center gap-1">

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { PaymentStatus, Prisma } from "@/lib/generated/prisma/client";
 import { auditEventQuery, recordAuditEvent } from "@/lib/audit/log";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -22,6 +23,7 @@ const recordSchema = z.object({
 });
 
 export async function recordPayment(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = recordSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -80,6 +82,7 @@ const statusSchema = z.object({
 });
 
 export async function updatePaymentStatus(paymentId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;

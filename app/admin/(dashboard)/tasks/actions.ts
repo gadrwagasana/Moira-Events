@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { TaskStatus, TaskPriority } from "@/lib/generated/prisma/client";
 import { isValidTransition } from "@/lib/tasks/transitions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -18,6 +19,7 @@ const taskSchema = z.object({
 });
 
 export async function createTask(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = taskSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -40,6 +42,7 @@ export async function createTask(bookingId: string, formData: FormData) {
 }
 
 export async function updateTask(taskId: string, bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = taskSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -66,6 +69,7 @@ const statusSchema = z.object({ status: z.nativeEnum(TaskStatus) });
 // Transition-validated (§11 — no arbitrary status strings). completedAt is
 // managed here, alongside status, rather than as a separately invented rule.
 export async function updateTaskStatus(taskId: string, bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -88,6 +92,7 @@ export async function updateTaskStatus(taskId: string, bookingId: string, formDa
 // Deletion is blocked once a task leaves TODO (§34) — abandon via CANCELLED
 // instead, which preserves history.
 export async function deleteTask(taskId: string, bookingId: string) {
+  await requireAdminRole("ADMIN");
   const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
   if (task.status !== "TODO") return;
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getPaymentsList } from "@/lib/payments/data";
 import { PaymentStatus } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Payments — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function AdminPaymentsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; source?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

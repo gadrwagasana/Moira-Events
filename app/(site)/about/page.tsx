@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/PageHero";
 import { ValuesGrid } from "@/components/ValuesGrid";
-import { PlaceholderImage } from "@/components/PlaceholderImage";
+import { CmsImage } from "@/components/CmsImage";
 import { CTAButtons } from "@/components/CTAButtons";
 import { companyDescription, mission, vision, futureDirection, knownFor } from "@/lib/content/company";
+import { getAllSiteImageSlots } from "@/lib/site-images/data";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "About",
@@ -12,44 +14,50 @@ export const metadata: Metadata = {
   alternates: { canonical: "/about" },
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const [slots, copy] = await Promise.all([getAllSiteImageSlots(), getSiteCopy()]);
+
   return (
     <>
-      <PageHero eyebrow="About Moira Events" title={knownFor} />
+      <PageHero
+        eyebrow={copy["about.hero.eyebrow"] ?? "About Moira Events"}
+        title={copy["about.hero.headline"] ?? knownFor}
+      />
 
       <section className="section grid items-center gap-12 lg:grid-cols-2">
         <div className="space-y-4 text-ink/80">
-          {companyDescription.paragraphs.map((p) => (
-            <p key={p}>{p}</p>
-          ))}
+          <p>{copy["about.intro.paragraph1"] ?? companyDescription.paragraphs[0]}</p>
+          <p>{copy["about.intro.paragraph2"] ?? companyDescription.paragraphs[1]}</p>
         </div>
-        <PlaceholderImage label="The Moira Events Team" />
+        <CmsImage slot={slots["about-team"]} className="aspect-[4/3] w-full rounded-xl" />
       </section>
 
       <section className="bg-ivory-200">
         <div className="section grid gap-10 md:grid-cols-2">
           <div className="rounded-xl bg-ivory-50 p-8">
-            <h2 className="font-serif text-2xl text-espresso-700">Mission</h2>
-            <p className="mt-4 text-sm text-ink/70">{mission}</p>
+            <h2 className="font-serif text-2xl text-espresso-700">{copy["about.mission.heading"] ?? "Mission"}</h2>
+            <p className="mt-4 text-sm text-ink-muted">{copy["about.mission.body"] ?? mission}</p>
           </div>
           <div className="rounded-xl bg-ivory-50 p-8">
-            <h2 className="font-serif text-2xl text-espresso-700">Vision</h2>
-            <p className="mt-4 text-sm text-ink/70">{vision}</p>
+            <h2 className="font-serif text-2xl text-espresso-700">{copy["about.vision.heading"] ?? "Vision"}</h2>
+            <p className="mt-4 text-sm text-ink-muted">{copy["about.vision.body"] ?? vision}</p>
           </div>
         </div>
       </section>
 
       <section className="section">
         <div className="mb-12 text-center">
-          <p className="label-eyebrow mb-3">Our Values</p>
-          <h2 className="font-serif text-3xl text-espresso-700">What Guides Us</h2>
+          <p className="label-eyebrow mb-3">{copy["about.values.eyebrow"] ?? "Our Values"}</p>
+          <h2 className="font-serif text-3xl text-espresso-700">{copy["about.values.heading"] ?? "What Guides Us"}</h2>
         </div>
         <ValuesGrid />
       </section>
 
       <section className="bg-ivory-200">
         <div className="section">
-          <h2 className="font-serif text-2xl text-espresso-700">Where We&rsquo;re Headed</h2>
+          <h2 className="font-serif text-2xl text-espresso-700">
+            {copy["about.future.heading"] ?? "Where We’re Headed"}
+          </h2>
           <ul className="mt-6 grid gap-3 sm:grid-cols-2">
             {futureDirection.map((item) => (
               <li key={item} className="flex items-start gap-3 rounded-lg bg-ivory-50 p-4 text-sm text-ink/80">
@@ -62,7 +70,9 @@ export default function AboutPage() {
       </section>
 
       <section className="section text-center">
-        <h2 className="font-serif text-2xl text-espresso-700">Let&rsquo;s Plan Your Event Together</h2>
+        <h2 className="font-serif text-2xl text-espresso-700">
+          {copy["about.cta.heading"] ?? "Let’s Plan Your Event Together"}
+        </h2>
         <CTAButtons className="mt-6 justify-center" />
       </section>
     </>

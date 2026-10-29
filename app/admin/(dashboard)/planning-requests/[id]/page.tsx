@@ -6,11 +6,13 @@ import { getValidNextStatuses } from "@/lib/planning-requests/transitions";
 import { TaskPriority } from "@/lib/generated/prisma/client";
 import { respondToPlanningRequest, updatePlanningRequestStatus, updatePlanningRequestPriority } from "../actions";
 import { getLatestEmailDelivery } from "@/lib/email/outbox";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Planning Request — Moira Events Admin" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminPlanningRequestDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const request = await getPlanningRequestDetail(id);
   if (!request) notFound();

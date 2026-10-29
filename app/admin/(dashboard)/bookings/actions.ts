@@ -18,6 +18,7 @@ import { sendTrackedEmail, type SendEmailFormState } from "@/lib/email/outbox";
 import { isBookingSendable } from "@/lib/bookings/send-guard";
 import { auditEventQuery, recordAuditEvent } from "@/lib/audit/log";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -28,6 +29,7 @@ const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefin
 // click (or a second request) lands on the existing booking instead of
 // creating a duplicate, backed by the DB-unique Booking.quoteId.
 export async function createBookingFromQuote(quoteId: string) {
+  await requireAdminRole("ADMIN");
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
     include: {
@@ -121,6 +123,7 @@ const statusSchema = z.object({
 });
 
 export async function updateBookingStatus(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -164,6 +167,7 @@ const notesSchema = z.object({
 });
 
 export async function updateBookingPlanningNotes(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = notesSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -193,6 +197,7 @@ function combineDateTime(date?: string, time?: string): Date | null {
 }
 
 export async function createTimelineItem(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = timelineItemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -214,6 +219,7 @@ export async function createTimelineItem(bookingId: string, formData: FormData) 
 }
 
 export async function updateTimelineItem(itemId: string, bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = timelineItemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -237,6 +243,7 @@ export async function updateTimelineItem(itemId: string, bookingId: string, form
 const timelineStatusSchema = z.object({ status: z.nativeEnum(EventTimelineStatus) });
 
 export async function updateTimelineItemStatus(itemId: string, bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = timelineStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -252,6 +259,7 @@ export async function updateTimelineItemStatus(itemId: string, bookingId: string
 }
 
 export async function deleteTimelineItem(itemId: string, bookingId: string) {
+  await requireAdminRole("ADMIN");
   await prisma.eventTimelineItem.delete({ where: { id: itemId } });
   revalidatePath(`/admin/bookings/${bookingId}`);
 }
@@ -266,6 +274,7 @@ const recommendVendorSchema = z.object({
 });
 
 export async function linkVendorToBooking(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = recommendVendorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -290,6 +299,7 @@ const updateRecommendationSchema = z.object({
 });
 
 export async function updateBookingVendor(bookingVendorRecommendationId: string, bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = updateRecommendationSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -310,6 +320,7 @@ export async function updateBookingVendor(bookingVendorRecommendationId: string,
 // Removes the booking<->recommendation link only — the VendorRecommendation
 // catalogue record is never touched here (§13/§21).
 export async function unlinkVendorFromBooking(bookingVendorRecommendationId: string, bookingId: string) {
+  await requireAdminRole("ADMIN");
   await prisma.bookingVendorRecommendation.delete({ where: { id: bookingVendorRecommendationId } });
   revalidatePath(`/admin/bookings/${bookingId}`);
 }
@@ -320,6 +331,7 @@ const planningNoteSchema = z.object({
 });
 
 export async function addPlanningNote(bookingId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = planningNoteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -331,6 +343,7 @@ export async function addPlanningNote(bookingId: string, formData: FormData) {
 }
 
 export async function deletePlanningNote(noteId: string, bookingId: string) {
+  await requireAdminRole("ADMIN");
   await prisma.planningNote.delete({ where: { id: noteId } });
   revalidatePath(`/admin/bookings/${bookingId}`);
 }
@@ -340,6 +353,7 @@ export async function sendBookingConfirmationEmail(
   _prevState: SendEmailFormState,
   formData: FormData,
 ): Promise<SendEmailFormState> {
+  await requireAdminRole("ADMIN");
   const requestId = String(formData.get("requestId") ?? "");
   if (!requestId) return { status: "error", message: "Missing request id — please reload the page and try again." };
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getQuotesList } from "@/lib/quotes/data";
 import { QuoteStatus } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Quotes — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function AdminQuotesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

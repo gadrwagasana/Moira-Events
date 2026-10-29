@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getVendorDetail } from "@/lib/vendors/data";
 import { updateVendor, setVendorActive } from "../actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Vendor Recommendation Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 const CATEGORY_SUGGESTIONS = ["Photography", "Videography", "Catering", "Decoration", "Entertainment", "DJ", "Venue", "Transport", "Makeup", "Hair", "Cake", "Security", "Other"];
 
 export default async function AdminVendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const vendor = await getVendorDetail(id);
   if (!vendor) notFound();

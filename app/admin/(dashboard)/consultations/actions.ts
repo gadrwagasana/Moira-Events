@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { ConsultationStatus, ConsultationMethod } from "@/lib/generated/prisma/client";
 import { isValidTransition } from "@/lib/consultations/transitions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -15,6 +16,7 @@ const statusSchema = z.object({
 });
 
 export async function updateConsultationStatus(consultationId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -54,6 +56,7 @@ const rescheduleSchema = z.object({
 // a scheduled date before it's formally confirmed, and an already-CONFIRMED
 // one can be moved without losing its CONFIRMED status.
 export async function rescheduleConsultation(consultationId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const consultation = await prisma.consultation.findUniqueOrThrow({ where: { id: consultationId } });
   if (consultation.status === "COMPLETED" || consultation.status === "CANCELLED") return;
 

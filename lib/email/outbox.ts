@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { Prisma, EmailType } from "@/lib/generated/prisma/client";
+import { withDbRetry } from "@/lib/db-retry";
+import { Prisma, EmailType, EmailDeliveryStatus } from "@/lib/generated/prisma/client";
 import { sendEmail, type EmailMessage } from "./send";
 
 export type { SendEmailFormState } from "./send-email-state";
@@ -132,8 +133,56 @@ export async function sendTrackedEmail(args: SendTrackedEmailArgs): Promise<Send
 // Used by the small "Last sent" status line next to each Send button/form —
 // reads the most recent delivery attempt for a given business record.
 export async function getLatestEmailDelivery(type: EmailType, relatedRecordId: string) {
-  return prisma.emailDelivery.findFirst({
-    where: { type, relatedRecordId },
+  return withDbRetry(() =>
+    prisma.emailDelivery.findFirst({
+      where: { type, relatedRecordId },
+      orderBy: { createdAt: "desc" },
+    }),
+  );
+}
+
+// Backs the admin Emails list (/admin/emails) — every EmailDelivery row,
+// regardless of related record, so attemptCount/lastError/providerMessageId
+// history is visible system-wide, not just the single latest attempt per
+// record that getLatestEmailDelivery above returns.
+export async function getEmailDeliveriesList(
+  filters: {
+    type?: string;
+    status?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+  },
+  take = 200,
+) {
+  const { type, status, q, from, to } = filters;
+
+  const where: Prisma.EmailDeliveryWhereInput = {
+    ...(type && Object.values(EmailType).includes(type as EmailType) ? { type: type as EmailType } : {}),
+    ...(status && Object.values(EmailDeliveryStatus).includes(status as EmailDeliveryStatus)
+      ? { status: status as EmailDeliveryStatus }
+      : {}),
+    ...(q
+      ? {
+          OR: [
+            { recipientEmail: { contains: q, mode: "insensitive" } },
+            { relatedRecordId: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+    ...(from || to
+      ? {
+          createdAt: {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+          },
+        }
+      : {}),
+  };
+
+  return prisma.emailDelivery.findMany({
+    where,
     orderBy: { createdAt: "desc" },
+    take,
   });
 }

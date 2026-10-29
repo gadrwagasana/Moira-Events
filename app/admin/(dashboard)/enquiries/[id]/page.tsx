@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { EnquiryStatus } from "@/lib/generated/prisma/client";
 import { updateEnquiryStatus } from "../actions";
 import { addCommunicationNote } from "../communication-actions";
 import { createQuoteFromEnquiry } from "../../quotes/actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Enquiry Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -18,31 +20,44 @@ const typeLabels: Record<string, string> = {
 };
 
 export default async function AdminEnquiryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
 
-  const enquiry = await prisma.enquiry.findUnique({
-    where: { id },
-    include: {
-      client: true,
-      event: { include: { weddingType: true } },
-      services: { include: { service: true } },
-      quotes: { orderBy: { createdAt: "desc" } },
-    },
-  });
+  const enquiry = await withDbRetry(() =>
+    prisma.enquiry.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        event: { include: { weddingType: true } },
+        services: { include: { service: true } },
+        quotes: { orderBy: { createdAt: "desc" } },
+      },
+    }),
+  );
 
   if (!enquiry) notFound();
 
-  const [otherEnquiries, communications] = await Promise.all([
+  // Sequential, not Promise.all — the main record above already used one
+  // connection; firing two more in parallel immediately after is exactly
+  // the kind of concurrent-connection burst that's triggered "Server has
+  // closed the connection" against this project's local database, and a
+  // constrained production pool is vulnerable to the same pressure. These
+  // two queries are supplementary (an activity sidebar), not required for
+  // the page's main content, so the small latency cost of running them one
+  // after another is the right trade here.
+  const otherEnquiries = await withDbRetry(() =>
     prisma.enquiry.findMany({
       where: { clientId: enquiry.clientId, id: { not: enquiry.id } },
       orderBy: { submittedAt: "desc" },
       select: { id: true, referenceNumber: true, submittedAt: true, status: true, event: { select: { type: true } } },
     }),
+  );
+  const communications = await withDbRetry(() =>
     prisma.communication.findMany({
       where: { enquiryId: enquiry.id },
       orderBy: { createdAt: "desc" },
     }),
-  ]);
+  );
 
   return (
     <div className="space-y-8">

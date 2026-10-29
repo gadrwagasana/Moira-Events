@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { EnquiryStatus, QuoteStatus, BookingStatus, ConsultationStatus } from "@/lib/generated/prisma/client";
 import { parseDateRangeWhere, type DateRangeParams } from "./date-range";
 import { getConsultationCounts } from "./operational";
@@ -24,14 +25,26 @@ export type FunnelReport = {
 export async function getFunnelReport(range: DateRangeParams): Promise<FunnelReport> {
   const submittedWhere = parseDateRangeWhere("submittedAt", range);
 
-  const [enquiries, quoted, accepted, booked, lost, consultations] = await Promise.all([
-    prisma.enquiry.count({ where: { ...submittedWhere } }),
+  // Sequential, not Promise.all — six queries fired at once is exactly the
+  // kind of concurrent-connection burst that triggers "Server has closed the
+  // connection" against a constrained pool (see the enquiry detail page for
+  // the same pattern and rationale). Each stage's predicate differs enough
+  // (relational quote/booking filters, a plain status filter, a groupBy)
+  // that collapsing them into one query would risk subtly breaking the
+  // funnel math, so this keeps the six queries as-is and just runs them one
+  // after another with retry instead.
+  const enquiries = await withDbRetry(() => prisma.enquiry.count({ where: { ...submittedWhere } }));
+  const quoted = await withDbRetry(() =>
     prisma.enquiry.count({
       where: { ...submittedWhere, quotes: { some: { status: { notIn: [QuoteStatus.DRAFT, QuoteStatus.INTERNAL_REVIEW] } } } },
     }),
+  );
+  const accepted = await withDbRetry(() =>
     prisma.enquiry.count({
       where: { ...submittedWhere, quotes: { some: { status: QuoteStatus.ACCEPTED } } },
     }),
+  );
+  const booked = await withDbRetry(() =>
     prisma.enquiry.count({
       where: {
         ...submittedWhere,
@@ -43,11 +56,13 @@ export async function getFunnelReport(range: DateRangeParams): Promise<FunnelRep
         },
       },
     }),
+  );
+  const lost = await withDbRetry(() =>
     prisma.enquiry.count({
       where: { ...submittedWhere, status: { in: [EnquiryStatus.CANCELLED, EnquiryStatus.DECLINED] } },
     }),
-    getConsultationCounts(range),
-  ]);
+  );
+  const consultations = await withDbRetry(() => getConsultationCounts(range));
 
   const pct = (n: number) => (enquiries > 0 ? (n / enquiries) * 100 : 0);
 

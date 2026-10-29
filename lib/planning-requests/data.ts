@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { Prisma, PlanningRequestStatus, TaskPriority } from "@/lib/generated/prisma/client";
 
 export async function getPlanningRequestsList(filters: {
@@ -31,24 +32,28 @@ export async function getPlanningRequestsList(filters: {
       : {}),
   };
 
-  return prisma.planningRequest.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: {
-      client: { select: { fullName: true, email: true } },
-      booking: { select: { id: true, bookingNumber: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
-    },
-  });
+  return withDbRetry(() =>
+    prisma.planningRequest.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        client: { select: { fullName: true, email: true } },
+        booking: { select: { id: true, bookingNumber: true } },
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    }),
+  );
 }
 
 export async function getPlanningRequestDetail(id: string) {
-  return prisma.planningRequest.findUnique({
-    where: { id },
-    include: {
-      client: { select: { fullName: true, email: true } },
-      booking: { select: { id: true, bookingNumber: true } },
-      messages: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  return withDbRetry(() =>
+    prisma.planningRequest.findUnique({
+      where: { id },
+      include: {
+        client: { select: { fullName: true, email: true } },
+        booking: { select: { id: true, bookingNumber: true } },
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    }),
+  );
 }

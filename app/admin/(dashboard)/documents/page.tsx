@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getDocumentRecordsList } from "@/lib/documents/data";
 import { DocumentType } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Documents — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function AdminDocumentsPage({
 }: {
   searchParams: Promise<{ type?: string; reference?: string; relatedRecordId?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const type = params.type ?? "";
   const reference = params.reference?.trim() ?? "";

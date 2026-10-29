@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getPaymentDetail } from "@/lib/payments/data";
 import { PaymentStatus } from "@/lib/generated/prisma/client";
 import { updatePaymentStatus } from "../actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Payment Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ function dateStr(d: Date | null | undefined) {
 }
 
 export default async function AdminPaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const payment = await getPaymentDetail(id);
   if (!payment) notFound();
@@ -51,6 +53,26 @@ export default async function AdminPaymentDetailPage({ params }: { params: Promi
             <Row label="Payment Date" value={dateStr(payment.paymentDate)} />
             {payment.notes && <Row label="Notes" value={payment.notes} />}
           </dl>
+          {(payment.invoice || payment.provider) && (
+            <div className="mt-4 border-t border-espresso-100 pt-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink/50">Online Payment</p>
+              <dl className="space-y-1 text-sm">
+                {payment.invoice && (
+                  <Row
+                    label="Invoice"
+                    value={
+                      <Link href={`/admin/invoices/${payment.invoice.id}`} className="text-espresso-600 hover:underline">
+                        {payment.invoice.invoiceNumber}
+                      </Link>
+                    }
+                  />
+                )}
+                {payment.provider && <Row label="Provider" value={payment.provider} />}
+                {payment.providerTransactionId && <Row label="Transaction ID" value={payment.providerTransactionId} />}
+                {payment.providerEventId && <Row label="Event ID" value={payment.providerEventId} />}
+              </dl>
+            </div>
+          )}
           {(payment.status === "REFUNDED" || payment.status === "PARTIALLY_REFUNDED") && (
             <div className="mt-4 border-t border-espresso-100 pt-4">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink/50">Refund</p>

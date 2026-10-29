@@ -6,6 +6,7 @@ import { getInvoiceDetail } from "@/lib/invoices/data";
 import { computePaymentSummary } from "@/lib/payments/totals";
 import { getValidNextStatuses } from "@/lib/invoices/transitions";
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { getLatestEmailDelivery } from "@/lib/email/outbox";
 import {
   updateInvoiceDetails,
@@ -15,6 +16,7 @@ import {
   updateInvoiceStatus,
 } from "../actions";
 import { SendInvoiceButton } from "./SendInvoiceButton";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Invoice Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -30,6 +32,7 @@ function dateInputValue(d: Date | null | undefined) {
 }
 
 export default async function AdminInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const invoice = await getInvoiceDetail(id);
   if (!invoice) notFound();
@@ -41,17 +44,24 @@ export default async function AdminInvoiceDetailPage({ params }: { params: Promi
   const paymentSummary = computePaymentSummary(invoice.total, booking.payments);
   const hasMultipleInvoices = booking.invoices.length > 1;
   const requestId = randomUUID();
+  // Sequential, not Promise.all — keeps concurrent-connection pressure low
+  // against a constrained pool (see the enquiry detail page for the same
+  // pattern and rationale).
   const lastDelivery = await getLatestEmailDelivery("INVOICE_ISSUED", id);
   // Passive display only — never mutates Invoice.status (Stage N keeps the
   // existing admin-only status-transition philosophy unchanged).
-  const lastOnlinePayment = await prisma.payment.findFirst({
-    where: { invoiceId: id, provider: { not: null } },
-    orderBy: { createdAt: "desc" },
-    select: { status: true, createdAt: true, amount: true, currency: true },
-  });
+  const lastOnlinePayment = await withDbRetry(() =>
+    prisma.payment.findFirst({
+      where: { invoiceId: id, provider: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, createdAt: true, amount: true, currency: true },
+    }),
+  );
 
   const bookingServices = isDraft
-    ? await prisma.bookingService.findMany({ where: { bookingId: booking.id }, orderBy: { sortOrder: "asc" } })
+    ? await withDbRetry(() =>
+        prisma.bookingService.findMany({ where: { bookingId: booking.id }, orderBy: { sortOrder: "asc" } }),
+      )
     : [];
 
   return (
@@ -355,6 +365,14 @@ export default async function AdminInvoiceDetailPage({ params }: { params: Promi
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-ink/50">Terms</p>
                 <p className="mt-1 whitespace-pre-wrap text-ink/80">{invoice.terms}</p>
+              </div>
+            )}
+            {invoice.internalNotes && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-ink/50">
+                  Internal Notes <span className="normal-case text-ink/40">(staff only — written before this invoice was issued)</span>
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-ink/80">{invoice.internalNotes}</p>
               </div>
             )}
             <p className="text-xs text-ink/40">

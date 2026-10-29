@@ -4,13 +4,14 @@ import { useActionState } from "react";
 import { submitContactMessage } from "@/app/(site)/contact/actions";
 import { initialContactState } from "@/app/(site)/contact/types";
 import { RequiredMark } from "@/components/RequiredMark";
+import { Spinner } from "@/components/Spinner";
 
 export function ContactLeadForm() {
   const [state, formAction, isPending] = useActionState(submitContactMessage, initialContactState);
 
   if (state.status === "success") {
     return (
-      <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-6 text-sm text-ink/70">
+      <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-6 text-sm text-ink-muted">
         <p className="font-medium text-espresso-700">Thank you for reaching out.</p>
         <p className="mt-1">The Moira Events team will get back to you shortly.</p>
       </div>
@@ -27,6 +28,7 @@ export function ContactLeadForm() {
             id="ct-name"
             name="name"
             type="text"
+            autoComplete="name"
             required
             aria-invalid={!!state.errors?.fullName}
             aria-describedby={state.errors?.fullName ? "ct-name-error" : undefined}
@@ -40,6 +42,7 @@ export function ContactLeadForm() {
             id="ct-email"
             name="email"
             type="email"
+            autoComplete="email"
             required
             aria-invalid={!!state.errors?.email}
             aria-describedby={state.errors?.email ? "ct-email-error" : undefined}
@@ -50,7 +53,7 @@ export function ContactLeadForm() {
 
       <div>
         <label className="field-label" htmlFor="ct-phone">Phone / WhatsApp (optional)</label>
-        <input className="field-input" id="ct-phone" name="phone" type="tel" />
+        <input className="field-input" id="ct-phone" name="phone" type="tel" autoComplete="tel" inputMode="tel" />
       </div>
 
       <div>
@@ -71,7 +74,8 @@ export function ContactLeadForm() {
         <p className="form-error-banner" role="alert">{state.errors.form[0]}</p>
       )}
 
-      <button type="submit" className="btn-primary w-full sm:w-auto" disabled={isPending}>
+      <button type="submit" className="btn-primary w-full gap-2 sm:w-auto" disabled={isPending}>
+        {isPending && <Spinner />}
         {isPending ? "Sending..." : "Send Message"}
       </button>
     </form>

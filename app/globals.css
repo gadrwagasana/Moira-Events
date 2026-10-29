@@ -27,6 +27,11 @@
   --color-ivory: #f5f1eb;
 
   --color-ink: #241f1c;
+  /* Solid-color replacement for the previous `text-ink/60`–`/70` opacity
+     pattern on body copy, which measured well under the WCAG AA 4.5:1
+     minimum against ivory/white backgrounds. A real color, not an alpha
+     blend, so contrast is fixed regardless of what's behind it. */
+  --color-ink-muted: #4a443f;
 
   --font-serif: var(--font-display), Georgia, serif;
   --font-sans: var(--font-body), system-ui, sans-serif;
@@ -52,7 +57,7 @@ body {
 }
 
 @utility section {
-  @apply mx-auto max-w-content px-6 py-16 md:py-24;
+  @apply mx-auto max-w-content px-6 py-12 md:py-24;
 }
 
 @utility btn {
@@ -76,7 +81,7 @@ body {
 }
 
 @utility label-eyebrow {
-  @apply text-xs font-semibold uppercase tracking-[0.2em] text-espresso-500;
+  @apply text-sm font-semibold uppercase tracking-[0.2em] text-espresso-500;
 }
 
 @utility field-label {
@@ -93,4 +98,48 @@ body {
 
 @utility form-error-banner {
   @apply rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700;
+}
+
+/* Shared :focus-visible ring for interactive elements that don't already
+   carry one (btn/field-input apply their own) — plain links, icon buttons,
+   sortable column headers, pagination controls. */
+@utility focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso-500 focus-visible:ring-offset-2 focus-visible:ring-offset-ivory-50;
+}
+
+/* "Stretched link" pattern — an ancestor gets `relative`, the one real
+   link/heading inside it gets `stretched-link`, and its ::after expands to
+   fill that ancestor's full box. Makes an entire table row or card
+   clickable while keeping exactly one real, keyboard-focusable link (no
+   nested/duplicate interactive elements, no JS). */
+@utility stretched-link {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/* Dashboard sidebar (admin + client portal) entrance animation — a plain
+   class, not @utility, because it needs its own prefers-reduced-motion
+   override rather than a Tailwind variant on the same declaration. */
+@keyframes sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.sidebar-in {
+  animation: sidebar-in 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-in {
+    animation: none;
+  }
 }

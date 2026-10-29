@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getFinancialReport, type CurrencyAmount } from "@/lib/analytics/financial";
 import { BarChart } from "@/lib/analytics/chart";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Financial Report — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ export default async function AdminAnalyticsFinancialPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const from = params.from ?? "";
   const to = params.to ?? "";

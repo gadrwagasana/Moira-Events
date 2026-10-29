@@ -8,6 +8,7 @@ import { isValidTransition } from "@/lib/planning-requests/transitions";
 import { planningResponseEmail, appUrl } from "@/lib/email/templates";
 import { sendTrackedEmail } from "@/lib/email/outbox";
 import { auditEventQuery, recordAuditEvent } from "@/lib/audit/log";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -22,6 +23,7 @@ const respondSchema = z.object({
 // it's naturally idempotent without needing a per-render requestId trick:
 // a genuine new reply only ever creates one new row.
 export async function respondToPlanningRequest(requestId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = respondSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -82,6 +84,7 @@ export async function respondToPlanningRequest(requestId: string, formData: Form
 const statusSchema = z.object({ status: z.nativeEnum(PlanningRequestStatus) });
 
 export async function updatePlanningRequestStatus(requestId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
@@ -116,6 +119,7 @@ const prioritySchema = z.object({
 });
 
 export async function updatePlanningRequestPriority(requestId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = prioritySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 

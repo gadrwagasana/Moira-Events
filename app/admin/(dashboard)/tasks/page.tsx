@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getTasksList } from "@/lib/tasks/data";
 import { TaskStatus, TaskPriority } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Tasks — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function AdminTasksPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; priority?: string; overdue?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

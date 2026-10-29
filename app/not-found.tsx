@@ -1,16 +1,17 @@
-import Link from "next/link";
+import type { Metadata } from "next";
+import { ErrorRecovery } from "@/components/ErrorRecovery";
+
+// Plain "Page not found" — the root layout's title template ("%s | Moira
+// Events") already appends the brand name; adding it here too produced
+// "Page not found | Moira Events | Moira Events" (confirmed via a live
+// request during the Phase M SEO audit).
+export const metadata: Metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-ivory-100 px-6 text-center">
-      <p className="label-eyebrow">404</p>
-      <h1 className="font-serif text-3xl text-espresso-700">Page Not Found</h1>
-      <p className="max-w-md text-ink/70">
-        The page you&rsquo;re looking for doesn&rsquo;t exist or may have moved.
-      </p>
-      <Link href="/" className="btn-primary mt-2">
-        Back to Home
-      </Link>
-    </div>
+    <ErrorRecovery
+      title="Page Not Found"
+      message="The page you're looking for doesn't exist or may have moved."
+    />
   );
 }

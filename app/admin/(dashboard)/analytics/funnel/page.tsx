@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getFunnelReport } from "@/lib/analytics/funnel";
 import { BarChart } from "@/lib/analytics/chart";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Sales Funnel — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function AdminAnalyticsFunnelPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const from = params.from ?? "";
   const to = params.to ?? "";

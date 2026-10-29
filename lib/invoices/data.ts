@@ -1,23 +1,26 @@
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { InvoiceStatus, Prisma } from "@/lib/generated/prisma/client";
 
 export async function getInvoiceDetail(id: string) {
-  return prisma.invoice.findUnique({
-    where: { id },
-    include: {
-      booking: {
-        include: {
-          client: true,
-          event: true,
-          weddingType: true,
-          payments: true,
-          invoices: { select: { id: true } },
+  return withDbRetry(() =>
+    prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        booking: {
+          include: {
+            client: true,
+            event: true,
+            weddingType: true,
+            payments: true,
+            invoices: { select: { id: true } },
+          },
         },
+        items: { orderBy: { sortOrder: "asc" }, include: { service: true } },
+        statusHistory: { orderBy: { createdAt: "desc" } },
       },
-      items: { orderBy: { sortOrder: "asc" }, include: { service: true } },
-      statusHistory: { orderBy: { createdAt: "desc" } },
-    },
-  });
+    }),
+  );
 }
 
 export async function getInvoicesList(filters: { q?: string; status?: string }) {

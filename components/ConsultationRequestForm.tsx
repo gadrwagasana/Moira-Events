@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { submitConsultationRequest } from "@/app/(site)/book-a-consultation/actions";
 import { initialConsultationState } from "@/app/(site)/book-a-consultation/types";
 import { RequiredMark } from "@/components/RequiredMark";
+import { Spinner } from "@/components/Spinner";
 
 function fieldErrors(errors: Record<string, string[]> | undefined, name: string) {
   return errors?.[name]?.[0];
@@ -14,7 +15,7 @@ export function ConsultationRequestForm() {
 
   if (state.status === "success") {
     return (
-      <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-6 text-sm text-ink/70">
+      <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-6 text-sm text-ink-muted">
         <p className="font-medium text-espresso-700">Thank you. The Moira Events team will reach out shortly to confirm your consultation.</p>
         {state.referenceNumber && <p className="mt-2">Reference: {state.referenceNumber}</p>}
       </div>
@@ -31,6 +32,7 @@ export function ConsultationRequestForm() {
             id="c-name"
             name="name"
             type="text"
+            autoComplete="name"
             required
             aria-invalid={!!fieldErrors(state.errors, "fullName")}
             aria-describedby={fieldErrors(state.errors, "fullName") ? "c-name-error" : undefined}
@@ -46,6 +48,7 @@ export function ConsultationRequestForm() {
             id="c-email"
             name="email"
             type="email"
+            autoComplete="email"
             required
             aria-invalid={!!fieldErrors(state.errors, "email")}
             aria-describedby={fieldErrors(state.errors, "email") ? "c-email-error" : undefined}
@@ -64,6 +67,8 @@ export function ConsultationRequestForm() {
             id="c-phone"
             name="phone"
             type="tel"
+            autoComplete="tel"
+            inputMode="tel"
             required
             aria-invalid={!!fieldErrors(state.errors, "phone")}
             aria-describedby={fieldErrors(state.errors, "phone") ? "c-phone-error" : undefined}
@@ -133,7 +138,8 @@ export function ConsultationRequestForm() {
         <p className="form-error-banner" role="alert">{state.errors.form[0]}</p>
       )}
 
-      <button type="submit" className="btn-primary w-full sm:w-auto" disabled={isPending}>
+      <button type="submit" className="btn-primary w-full gap-2 sm:w-auto" disabled={isPending}>
+        {isPending && <Spinner />}
         {isPending ? "Submitting..." : "Book a Consultation"}
       </button>
     </form>

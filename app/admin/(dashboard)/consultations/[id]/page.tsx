@@ -4,6 +4,7 @@ import { getConsultationDetail } from "@/lib/consultations/data";
 import { getValidNextStatuses } from "@/lib/consultations/transitions";
 import { ConsultationMethod } from "@/lib/generated/prisma/client";
 import { updateConsultationStatus, rescheduleConsultation } from "../actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Consultation Detail — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ function timeInputValue(d: Date | null | undefined) {
 }
 
 export default async function AdminConsultationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const consultation = await getConsultationDetail(id);
   if (!consultation) notFound();

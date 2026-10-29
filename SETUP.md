@@ -210,7 +210,174 @@ Not to be confused with the "Production readiness, security & verification" Stag
 - **Owner actions required**: pick and configure a real analytics provider if visitor-level tracking is wanted (wire it into `lib/tracking/events.ts`'s single `trackEvent` function — one place, not scattered); supply a real square icon/monogram asset to replace the generated placeholder favicon; confirm the production domain for `NEXT_PUBLIC_APP_URL` (sitemap/robots/canonical/JSON-LD all depend on it); supply real photography (every image area is still a styled placeholder, `components/PlaceholderImage.tsx`); provide portfolio case studies if the Portfolio page should show real work; testimonials/ratings/awards/a street address — none exist and none were fabricated.
 - **Limitations**: Lighthouse/Core Web Vitals could not be measured — no deployed environment exists. The analytics wiring's client-side behavior was verified by lint, type-check/build success, and code review (confirming each `trackEvent` call site and its guard conditions), not a live browser session.
 
+## CMS Phase 1 — admin identity & CMS data model (foundation only, not wired in)
+
+**Phase 1.1–1.4 addendum**: a follow-up security review (Phase 1.1) caught and fixed three real bugs in this phase's new code before any wiring — a scrypt `maxmem` value that crashed on first use, a missing URL-protocol allow-list in the rich-text renderer (`javascript:` links/images), and a password prompt that echoed to the terminal — and added `scripts/verify-cms-phase1-security.ts`, a zero-database-access test script. Phase 1.2 replaced the admin password hash itself with Argon2id (see `lib/admin/password.ts` below) per owner decision, superseding the scrypt implementation entirely. Phase 1.3 was a read-only re-review confirming all of the above and tracing the exact authorization boundary (see "Permissions" below). Phase 1.4 fixed `requireAdminRole()`'s exact-match-vs-minimum-permission ambiguity (`lib/admin/role.ts`), hardened the bootstrap password prompt to fail closed on non-interactive stdin instead of falling back to echoed input (`lib/admin/hidden-input.ts`), and added the recommended ADMIN/EDITOR permission matrix below.
+
+**Phase 2 superseded the "not wired in" framing below**: `proxy.ts`, `app/admin/login/actions.ts`, and `app/admin/(dashboard)/layout.tsx` now run on the new individual-admin identity system — see "CMS Phase 2" further down for the actual cutover, the full ADMIN-only lockdown of every existing admin area, and the new CMS admin UI. The rest of this Phase 1 section is kept for history (the schema design, the Tiptap/renderer work, the scrypt→Argon2id story) and is still accurate on those points.
+
+This phase prepared individual admin accounts (replacing the single shared `ADMIN_PASSWORD`) and a CMS data model, but **deliberately did not change how admin login or the dashboard behaved at the time**. Everything below was new, additive code — `proxy.ts`, `app/admin/login/actions.ts`, `app/admin/(dashboard)/layout.tsx`, and `lib/admin/session.ts` were untouched, and the existing shared-password login kept working exactly as before. (No longer true as of Phase 2 — see above.)
+
+- **Why nothing is wired in yet**: the new `Admin`/`CmsPage`/`CmsPageSection`/`BlogPost`/`MediaAsset` models exist only in `prisma/schema.prisma` — **no migration has been created or applied**, so none of these tables exist in the real database (local or production). No Neon/production connection was made this phase, and no `prisma migrate dev/deploy/db push` command was run. Wiring the new auth into the live dashboard before applying a migration would immediately break admin login against tables that don't exist.
+- **Verified safe this phase (zero DB-write risk)**: `npx prisma validate` (schema-only), `npx prisma generate` (reads the schema, writes `lib/generated/prisma/*` — no DB connection), `npm run lint`, `npm run build`, and a repository-wide grep confirming no route under `app/` imports any of the new modules (see "Grep invariant" below).
+- **Not runtime-tested** (no DB table to test against yet): the admin-identity DB lookup (`lib/admin/auth.ts`), a real password hash/verify round-trip, `scripts/bootstrap-admin.ts`, or signing in with the new flow. No automated test suite exists in this project (unchanged from Stage P).
+
+### New, unwired files
+
+- `lib/admin/password.ts` — **Argon2id** hash/verify for the new `Admin.passwordHash`, via `@node-rs/argon2` (napi-rs/Rust bindings), independent of `lib/client-portal/password.ts`'s separate scrypt-based implementation (no shared import or algorithm — that file is unchanged; see "Phase 1.2" below). Parameters (`memoryCost: 65536` KiB / 64 MiB, `timeCost: 3`, `parallelism: 1`) deliberately exceed the library's own default (19 MiB / 2 passes — already OWASP's first recommended Argon2id configuration), since this credential gates the highest-privilege account in the app. Measured locally at ~125ms per hash.
+  - **Library choice**: `@node-rs/argon2` was picked over the older `argon2` npm package specifically because it ships prebuilt native binaries per platform (no node-gyp compile step at install time) — lower-risk for Vercel's build. Confirmed locally that `@node-rs/argon2-win32-x64-msvc` installs and runs correctly. **Not verified against Vercel's actual Linux build/runtime** — no deploy has occurred this phase. Before relying on this in production, confirm Vercel's build log shows the correct Linux binary (`@node-rs/argon2-linux-x64-gnu` or `-musl`) being installed, and that Next.js's serverless output tracing actually bundles it (may require adding `serverExternalPackages: ["@node-rs/argon2"]` to `next.config.mjs` — not added yet, since nothing currently imports this package from any route to trace).
+  - **Gotcha already hit and fixed**: `@node-rs/argon2` exports its `Algorithm` enum as a TypeScript `const enum`, which `next build`'s per-file (`isolatedModules`) type-checking cannot access as a value — importing and using `Algorithm.Argon2id` directly fails with TS2748. Worked around by using the documented raw numeric value (`2`) instead of importing the enum.
+- `lib/admin/identity-session.ts` — a new signed session token (`adminId.expiresAt.signature`), using its own new `ADMIN_IDENTITY_SESSION_SECRET` env var (placeholder added to `.env`/`.env.example`, same `"change-me"` convention as the other three secrets) — never reusing `ADMIN_SESSION_SECRET`. The payload deliberately excludes role/active-status; those are read fresh from the database on every request (next item) so disabling an account or changing its role takes effect immediately.
+- `lib/admin/auth.ts` — `getAuthenticatedAdmin()` (wrapped in React's `cache()` so multiple call sites on one request cost one query, not several) / `requireAuthenticatedAdmin()` / `requireAdminRole(role)`. Unlike the client-portal session (which never touches the DB), this re-fetches the `Admin` row on every call — a deliberate departure, needed for instant deactivation.
+- `scripts/bootstrap-admin.ts` — one-time local setup script for the first `ADMIN` account. Refuses to run if any admin already exists (`prisma.admin.count() > 0`), prompts interactively for email/password (never accepted as a CLI argument or env var, to avoid shell-history exposure), requires a 12+ character password. **Written but not executed this phase** — running it would write to a table that doesn't exist yet.
+- `lib/cms/data.ts`, `lib/cms/actions.ts` — read/write scaffolding for `CmsPage`/`BlogPost` (list/get/create/publish/unpublish), following this project's established Server Action convention (Zod validation, `revalidatePath`, audit event written in the same `$transaction` as the business write). `createCmsPage`/`createBlogPost` require the `ADMIN` role specifically — EDITOR is not given access to anything yet (see "Permissions" below).
+- `lib/media/provider.ts` — a storage-provider interface plus an always-throwing `noop` implementation, mirroring `lib/documents/storage.ts`'s pattern. Documents a planned Vercel Blob adapter and the `BLOB_READ_WRITE_TOKEN` env var it will need; `@vercel/blob` is **not installed** and no store exists.
+- `components/cms/RichTextEditor.tsx` — a Tiptap v3 client-side rich-text editor (`@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/extension-link`, `@tiptap/extension-image`; `immediatelyRender: false` for SSR safety). Uses only Tiptap's core editor, not its newer UI Components package (not yet confirmed React 19-compatible per Tiptap's own docs) — toolbar is hand-built with plain Tailwind buttons, consistent with this app's "no UI component library" convention.
+- `components/cms/RichTextRenderer.tsx` — renders stored Tiptap JSON through a strict, explicit allow-list of node/mark types (paragraph, heading, bold, italic, bullet/ordered list, link, image, hard break) — never `dangerouslySetInnerHTML` on raw HTML. Any unrecognized node/mark type is silently dropped, not passed through.
+- `lib/audit/constants.ts` (edited, additive only) — new entity type `"Admin"`, `"CmsPage"`, `"BlogPost"`; new actions `admin.login_succeeded`/`admin.created`/`admin.role_changed`/`admin.disabled`/`admin.enabled`, `cms_page.created`/`published`/`unpublished`, `blog_post.created`/`published`/`unpublished`.
+
+### Schema additions (`prisma/schema.prisma`, purely additive, no migration applied)
+
+`enum AdminRole { ADMIN, EDITOR }`, `model Admin` (email unique, passwordHash, role, isActive, timestamps), `enum CmsContentStatus { DRAFT, PUBLISHED, UNPUBLISHED }`, `model CmsPage` (slug unique, title, metaDescription, ogImage → `MediaAsset` with `onDelete: Restrict`, status, sections), `model CmsPageSection` (ordered Json content blocks, cascades with its page), `model BlogPost` (slug unique, `bodyRichText` Json, featuredMedia → `MediaAsset` with `onDelete: Restrict`), `model MediaAsset` (storage key/url/metadata, soft-delete via `deletedAt`). `Restrict` on both media relations means a referenced image can't be deleted out from under a page/post. No `CmsRedirect`, revision-history, or blog-category models this phase (deferred by owner decision, not an oversight) — policy instead: don't change a published slug; if you must, the old URL 404s until a future phase adds redirect support.
+
+### Permissions — EDITOR is defined but not usable yet
+
+`AdminRole` has two values (`ADMIN`, `EDITOR`), but **every one of this app's 13 existing admin feature areas** has **zero in-action role checks** — they rely entirely on `proxy.ts`'s page-level gate, which only recognizes the one shared admin password, not individual accounts or roles. Deny-by-default for EDITOR holds **only because the new login flow is unreachable this phase** (no route calls `lib/admin/auth.ts`), not because any route actually enforces role. Do not treat `EDITOR` as a safe, limited role until the cutover below is complete and each admin area has been individually reviewed. **Hiding a navigation link is never authorization** — `app/admin/(dashboard)/layout.tsx`'s nav is a flat, role-unaware list today, and even a role-aware version of it would only hide a link, not block direct navigation to the URL or direct Server Action invocation. The only real enforcement point is inside each Server Action/data loader itself.
+
+**Recommended permission matrix** (CMS Phase 1.4 — a recommendation for owner sign-off, not yet implemented or wired into any route):
+
+| Area | ADMIN | EDITOR |
+|---|---|---|
+| Enquiries | Full access | No access |
+| Consultations | Full access | No access |
+| Tasks | Full access | No access |
+| Vendors | Full access | No access |
+| Clients | Full access | No access |
+| Payments | Full access | No access |
+| Planning Requests | Full access | No access |
+| Bookings | Full access | No access |
+| Quotes | Full access | No access |
+| Invoices | Full access | No access |
+| Documents | Full access | No access |
+| Audit Log | Full access | No access |
+| Analytics | Full access | No access |
+| CMS pages, homepage sections, blog, media | Full access | Create/edit drafts — **publish/unpublish is an open question, see below** |
+| Administrator management (create/disable/change role) | Full access | No access |
+
+Rationale: every non-CMS area above is operational, financial, customer, or audit data — the brief's own instruction is to default these to ADMIN-only, and nothing about the EDITOR role as described (a content editor) implies a need to touch bookings, payments, or other admins' accounts. CMS content and media are the one area an EDITOR role exists for at all.
+
+**Open owner decision, not resolved here**: whether EDITOR may publish/unpublish CMS pages and blog posts, or only create/edit drafts for an ADMIN to review and publish. Both are defensible (a small team may want editors to self-publish; a stricter review process would not). `lib/cms/actions.ts`'s `publishCmsPage`/`unpublishCmsPage`/`publishBlogPost`/`unpublishBlogPost` currently all require `ADMIN` — change their `requireAdminRole("ADMIN")` call to `requireAdminRole("EDITOR")` (which now means "EDITOR or higher," see below) if the decision is to allow EDITOR self-publish; leave as `"ADMIN"` otherwise. Administrator management (creating/disabling other admins, changing roles) must stay `ADMIN`-only regardless — an EDITOR must never be able to grant itself or anyone else a higher role.
+
+### Role-check API fix (CMS Phase 1.4)
+
+`lib/admin/auth.ts`'s `requireAdminRole(role)` originally did an **exact** match (`admin.role !== role`), which — with only two roles — meant `requireAdminRole("EDITOR")` would have incorrectly denied an `ADMIN` too, since `"ADMIN" !== "EDITOR"`. Not exploitable in practice (every call site only ever passed `"ADMIN"`), but ambiguous and a latent foot-gun for the first future EDITOR-permitted action. Fixed with a new `lib/admin/role.ts` exporting `hasAtLeastRole(actual, minimum)` — a rank-based (`ADMIN` > `EDITOR`) minimum-permission comparison, pure and dependency-free (no database or Next.js import, unit-tested directly in `scripts/verify-cms-phase1-security.ts`). `requireAdminRole(minimumRole)` now means "this role or anything above it," unambiguously, at every call site, with no call-site changes required (`requireAdminRole("ADMIN")` behaves identically to before, since nothing outranks `ADMIN` yet).
+
+### Grep invariant (confirms nothing new is reachable yet)
+
+```bash
+grep -rl "lib/cms/\(data\|actions\)\|lib/admin/auth\|lib/media/provider" app/
+```
+
+Must return nothing. Confirmed empty every time this has been checked across Phases 1–1.4 — if this ever returns a file, treat it as a signal that the cutover below has started (intentionally or not).
+
+### Required cutover sequence (do not skip steps or reorder)
+
+1. Confirm `DATABASE_URL` points at an explicitly local/test database (hostname `localhost`/`127.0.0.1`, or another host the owner has explicitly designated as local/test — never a managed-provider hostname such as Neon's) **before** running any migration command. Inspect `.env` to confirm this; never print its contents into logs, chat, or commits.
+2. Apply the prepared schema as a real migration against that verified local database (`npx prisma migrate dev` — see "Generating the migration" below for why this hasn't been done yet), then separately, after another explicit approval, `npx prisma migrate deploy` against production.
+3. Run `scripts/bootstrap-admin.ts` locally (interactive TTY required — it now fails closed otherwise) to create the first `ADMIN` account.
+4. Swap `app/admin/login/actions.ts` from the shared password check to email+password against `lib/admin/password.ts`/`Admin`, setting `ADMIN_IDENTITY_SESSION_COOKIE` with the same `httpOnly`/`secure`-in-production/`sameSite: lax` flags already used for the other three session cookies in this app.
+5. Update `logout` and session handling to clear the new cookie (and decide whether to retire `ADMIN_SESSION_COOKIE`/`lib/admin/session.ts` at the same time or keep both briefly during a transition).
+6. Update `proxy.ts` to recognize the new cookie — do this in the same change as step 4, not before and not long after, to avoid a window where the login action issues a cookie `proxy.ts` doesn't yet check (locking everyone out) or `proxy.ts` expects a cookie nothing yet issues (locking everyone out the other way).
+7. Add role enforcement at **every** applicable Server Action, route, and data-loader boundary — not just `app/admin/(dashboard)/layout.tsx` — using the permission matrix above as the starting policy, decided and signed off by the owner first.
+8. Review every one of the 13 existing admin areas individually against that matrix before any `EDITOR` account is ever created or activated.
+9. Before relying on this in production, verify in an approved preview deploy that Argon2id (`@node-rs/argon2`) actually resolves and runs on Vercel's Linux runtime (see "Argon2id deployment compatibility" below) — do this before, not after, real admin credentials depend on it.
+
+Each step needs explicit owner approval before being carried out — this list is a plan, not a standing authorization to execute it.
+
+### Generating the migration (when approved)
+
+No migration file for `Admin`/`CmsPage`/`CmsPageSection`/`BlogPost`/`MediaAsset` exists yet — confirmed by inspecting `prisma/migrations/`, which still ends at `20261016104157_stage_p_add_missing_indexes`. The new tables are pure additions (no `ALTER` on any existing table), so generating this migration is low-risk once a verified local database is confirmed per step 1 above. This project's established workaround for `prisma dev`'s shadow-database bug (used for every prior migration in this history) applies here too: `prisma migrate diff --from-config-datasource --to-schema ./prisma/schema.prisma --script`, strip the stray log line from its output, hand-create a timestamped migration folder with that SQL, then `prisma migrate deploy` + `prisma generate` against the confirmed-local database. Do not run any of this against a database whose host hasn't been explicitly confirmed as local/test first.
+
+### Argon2id deployment compatibility (unverified)
+
+`package-lock.json` lists `@node-rs/argon2-linux-x64-gnu`/`-musl` as available optional platform packages, matching Vercel's default Node.js serverless runtime (Linux x64) — this confirms the correct binary is *resolvable*, not that it has been installed and loaded there. Whether Vercel's build actually selects it, and whether Next.js's serverless output tracing bundles the resulting native binary into the deployed function (may require `serverExternalPackages: ["@node-rs/argon2"]` in `next.config.mjs`, not added yet since nothing under `app/` imports this package to trace), remains **unverified** until step 9 of the cutover sequence above.
+
+### Owner decisions pending
+
+- EDITOR publish/unpublish permission for CMS content (see permission matrix above).
+- Confirm the `ADMIN_IDENTITY_SESSION_SECRET` value before any future deploy that wires this in (currently a placeholder, like the other three secrets).
+- Vercel Blob (`@vercel/blob`, `BLOB_READ_WRITE_TOKEN`) is the planned media storage backend for `lib/media/provider.ts` — not installed or provisioned; needs explicit approval before adding a new dependency and creating a store.
+
+## CMS Phase 2 — Secure Admin Cutover and Pages/Homepage CMS
+
+The individual-admin identity system prepared in Phase 1 is now live in code — **but still untested end-to-end**, because no migration has been applied (see "Database and migration" below). The old shared-`ADMIN_PASSWORD` login is retired: nothing imports `lib/admin/session.ts` or reads `process.env.ADMIN_PASSWORD` anywhere in the app anymore (confirmed by grep). That file is left in place as dead code, not deleted, in case of rollback.
+
+### Login, logout, session, proxy
+
+- `app/admin/login/actions.ts` — email+password against the `Admin` table, `verifyAdminPassword()` (Argon2id). Always runs the password comparison — against the real stored hash, or `DECOY_PASSWORD_HASH` (`lib/admin/password.ts`) if the email doesn't match anyone — so an unknown email, a disabled account, and a wrong password all take the same time and get the same generic "Incorrect email or password" message. Rate-limited the same way the old login was (`admin-login:<ip>`, 10/15min). Records `admin.login_succeeded`/`admin.login_failed` audit events (never the password or hash). Sets `ADMIN_IDENTITY_SESSION_COOKIE` with `httpOnly`, `secure` in production, `sameSite: "lax"`, `path: "/"`, the identity session's own `maxAge`.
+- `logout` clears that cookie.
+- `proxy.ts` now checks `ADMIN_IDENTITY_SESSION_COOKIE`/`verifyAdminIdentityToken` (signature+expiry only, no DB — middleware can't use Prisma) instead of the old cookie. Updated in the same change as the login action, so there is no window where one issues a cookie the other rejects.
+- `app/admin/(dashboard)/layout.tsx` calls `requireAuthenticatedAdmin()` — authenticates, does not role-gate (an EDITOR must reach the layout to see their own nav). Shows the signed-in admin's email/role, filters the nav (ADMIN sees every existing area; EDITOR sees only "Pages"), working logout. The role-filtered nav is a convenience, not the enforcement — see below.
+
+### Authorization coverage (every existing admin area is individually gated)
+
+All 13 pre-existing admin feature areas (enquiries, consultations, tasks, vendors, clients, payments, planning requests, bookings, quotes, invoices, documents, audit log, analytics) now call `await requireAdminRole("ADMIN")` as the first statement of **every** page Server Component and **every** exported Server Action — not just once at the layout. Confirmed by direct grep count, not assumed: 43/43 Server Actions across the 10 `actions.ts` files, 22/22 `page.tsx` files, each with exactly one `requireAdminRole("ADMIN")` call. An EDITOR hitting any of these URLs or invoking any of these actions directly (bypassing the UI entirely) is redirected by `lib/admin/auth.ts`, which re-reads the `Admin` row from the database on every call — this is not a cached/stale check.
+
+### CMS permissions (owner-approved policy, now enforced in code)
+
+`lib/cms/actions.ts`: `createCmsPage`/`updateCmsPage`/`saveCmsPageSections`/`createBlogPost` use `requireAdminRole("EDITOR")` — minimum-permission (Phase 1.4's fix), so both EDITOR and ADMIN pass. `publishCmsPage`/`unpublishCmsPage`/`publishBlogPost`/`unpublishBlogPost` use `requireAdminRole("ADMIN")` — EDITOR may prepare content but never make it (or unmake it) public, exactly as approved. The admin CMS pages-list and edit screens render publish/unpublish controls only when `admin.role === "ADMIN"`, but that's UI convenience — the Server Actions re-check role themselves regardless of what's rendered.
+
+### CMS pages and homepage
+
+`/admin/cms` (list, search by title/slug), `/admin/cms/new` (create), `/admin/cms/[id]` (edit title/slug/metaDescription, manage an ordered list of sections, Publish/Unpublish for ADMIN), `/admin/cms/[id]/preview` (any authenticated admin, `force-dynamic`, renders through the same allow-list renderer the public site uses). **Homepage sections use the exact same `CmsPage`/`CmsPageSection` model and the exact same admin UI** — there is no separate "homepage" concept in the schema or the admin screens, by design (reuses the approved model instead of inventing a second one). **The public homepage (`app/(site)/page.tsx`) is completely untouched and still always renders** — no CMS-driven homepage renderer was wired into `/` this phase, so there is no way for a draft (or even a published) CMS page to replace or break it. Wiring an actual CMS-driven homepage into `/` is explicitly deferred to a future phase, once a public renderer for it has been built and verified — this phase only built the admin-side editing capability.
+
+Section content is Tiptap JSON, one section type for v1 (`"richtext"`, `lib/cms/content-schema.ts`'s `SECTION_TYPES`) — additional section types (hero, image grid, etc.) are an explicitly out-of-scope future addition, not invented here without a specified shape. Every section is validated server-side on save: node/mark type allow-list mirroring the renderer's own, and a 100KB serialized-size ceiling, both unit-tested (`scripts/verify-cms-phase1-security.ts`).
+
+### Public page rendering
+
+`app/(site)/[slug]/page.tsx` — the only dynamic catch-all under the public site. Next.js always prefers a more specific static route over a sibling `[slug]` route at the same level, so this cannot shadow `/`, `/about`, `/weddings`, `/services`, `/contact`, or any other existing static page (confirmed: the full build still lists all of them as their own static routes). `lib/cms/actions.ts`'s slug validation also rejects creating a page at any of those exact slugs up front (`RESERVED_SLUGS`, `lib/cms/slug.ts`), so an admin can't even create a page that would be invisibly shadowed. `getPublishedCmsPageBySlug` only ever returns a `status: "PUBLISHED"` row — a DRAFT or UNPUBLISHED page is indistinguishable from a nonexistent one at this route, by construction. A missing/unpublished slug calls `notFound()` (a real 404).
+
+### Blog — deferred
+
+Per the brief's own permission to defer rather than rush a partially-secure UI once the auth cutover and pages/homepage work turned out to be the bulk of this phase: `lib/cms/actions.ts`'s `createBlogPost`/`publishBlogPost`/`unpublishBlogPost` and `lib/cms/data.ts`'s blog read functions exist and follow the same role policy as pages, but **no blog admin UI and no public blog routes were built this phase**. Next bounded task: `/admin/cms/blog` (list/create/edit, mirroring the pages UI), `/blog` (published list) and `/blog/[slug]` (post page, same 404/draft-hiding rules as `[slug]`).
+
+### Tiptap / media / audit
+
+Tiptap integration unchanged from Phase 1 (`components/cms/RichTextEditor.tsx`/`RichTextRenderer.tsx`), now actually wired into the sections editor. `lib/media/provider.ts` is untouched — still a no-op seam, no Vercel Blob store, no upload control exists anywhere (the sections editor has no image-upload button; an `image` node could only reach storage by hand-editing Tiptap JSON directly, which the UI doesn't offer). New audit actions this phase: `admin.login_succeeded`, `admin.login_failed`, `cms_page.updated` (added to `lib/audit/constants.ts`).
+
+### Database and migration — still not done
+
+No migration exists for `Admin`/`CmsPage`/`CmsPageSection`/`BlogPost`/`MediaAsset` (confirmed: `prisma/migrations/` still ends at `20261016104157_stage_p_add_missing_indexes`). No Neon/production connection was made. **This means the entire login/authorization cutover above is code-complete but has never been exercised against a real database** — there is no admin account to log in with, locally or anywhere else, until the migration is applied and `scripts/bootstrap-admin.ts` is run. Apply it only after confirming `DATABASE_URL`'s host is `localhost`/`127.0.0.1` or another explicitly-designated local/test host — never a managed-provider hostname.
+
+### Testing performed this phase
+
+`npx tsx scripts/verify-cms-phase1-security.ts` (50 checks, all pure/zero-DB — password, session token, renderer, role rank, hidden-input, slug validation, section-content validation), `npm run lint` (0 errors), `npm run build` (compiles, type-checks, generates all 25 routes including the new ones). Additionally, a direct grep-based static count confirmed 43/43 Server Actions and 22/22 pages across the 13 existing admin areas each have exactly one `requireAdminRole("ADMIN")` call. **Not tested, and not claimed as tested**: an actual login, an actual EDITOR-vs-ADMIN access attempt, an actual publish/unpublish, an actual public page view — all of these require the database connection this phase deliberately avoided.
+
+## CMS image slots & portfolio (public-site photography)
+
+The public site's photography (homepage hero, "why Moira Events," each division's two images, the About team photo) is now CMS-managed rather than hardcoded or hidden — editable from **Admin → Site Images**, which lists all nine fixed slots (see `lib/site-images/slots.ts`). A separate, real list of case studies lives at **Admin → Portfolio**, driving a filterable, keyboard-accessible gallery at `/portfolio` (`components/PortfolioGallery.tsx`).
+
+New models (migration `20261020120000_add_site_images_portfolio`, applied to the local dev database): `SiteImageSlot` (one row per fixed key) and `PortfolioItem` (an open-ended, admin-managed list). Both reference `Admin` for attribution.
+
+**Image storage decision**: there is still no upload pipeline (`lib/media/provider.ts` remains a no-op seam; Vercel Blob was never approved). An admin pastes a URL to an already-hosted photo instead of uploading a file. This is not a passthrough, though: `next.config.mjs` now allow-lists `https://` remote images (`images.remotePatterns`), so every pasted URL — wherever it's hosted — is still fetched, resized, and re-encoded to AVIF/WebP by Next's own image optimizer at render time via `<CmsImage>`/`next/image`. That's a real, render-time compression guarantee; what it does *not* give you is a compressed stored original (there is no "original" on this server — the file lives wherever the admin got the URL from). Revisit if/when real uploads are approved.
+
+Every slot renders through `components/CmsImage.tsx`: a real photo when the CMS has one (with focal point via `object-position`, optional caption shown only when distinct from the nearby heading), or a polished branded placeholder (ivory/espresso gradient + a faint centered logo mark, `aria-hidden`) when it doesn't — **never hidden, never a broken-image icon**. This supersedes the old `EventImage` component (deleted), which used to render nothing at all for a missing `src`.
+
+Role policy mirrors CMS pages: EDITOR can create/edit slots and portfolio items; publishing, unpublishing, and deleting a portfolio item require ADMIN (`lib/site-images/actions.ts`). An item missing both an image and a story can never be published (enforced both at write-time and again at the public read in `lib/site-images/data.ts`, in case a row is ever edited directly).
+
+**Tested**: `npx prisma validate`/`generate`, `npx tsc --noEmit` (0 errors), `npm run lint` (0 errors, pre-existing unrelated warnings only), the migration applied against the confirmed-local database with a disposable table-listing script confirming only `SiteImageSlot`/`PortfolioItem` were added, and `curl` smoke tests of `/`, `/about`, `/weddings`, `/parties-social-events`, `/corporate-events`, `/portfolio`, and the new `/admin/site-images`/`/admin/portfolio` routes (redirect to login when unauthenticated, as expected) against the running dev server. **Not tested**: an actual admin edit of a slot or portfolio item end-to-end (no browser), and no case-study content or photography exists yet, so the public gallery currently (correctly) shows its empty state.
+
 ## Deploying
+
+### Database migrations on deploy (Vercel)
+
+`package.json` has a `vercel-build` script — Vercel auto-detects and runs this instead of `build` for Next.js projects, no dashboard configuration needed: `if [ -n "$DATABASE_URL_UNPOOLED" ]; then DATABASE_URL=$DATABASE_URL_UNPOOLED prisma migrate deploy; fi && next build`. This applies any pending migrations to the production (Neon) database on every deploy, before the app itself builds, so a deploy can never ship code that reads from tables that don't exist yet.
+
+It runs against `DATABASE_URL_UNPOOLED` specifically, not the normal pooled `DATABASE_URL` the running app uses — Prisma's migration engine uses advisory locks that pooled connections (PgBouncer-style, which Neon's default pooled endpoint uses) don't reliably support. Vercel's Neon integration adds `DATABASE_URL_UNPOOLED` automatically when connected; confirm it's present in the project's Vercel environment variables before relying on this. `prisma migrate deploy` is idempotent — it only applies migrations not already recorded, so running it on every deploy (including ones with no new migrations) is safe and a no-op.
+
+**Preview deploys**: if `DATABASE_URL_UNPOOLED` is only set for the Production environment (the usual setup), a Preview build (any branch other than the one tied to Production) skips the migration step entirely instead of failing — the `if [ -n ... ]` guard means an unset variable just means "don't migrate here," not a broken build. Preview builds run against whatever schema already exists; they never attempt to migrate an environment this script can't positively identify.
+
+This only affects Vercel deploys — local `npm run build`/`npm run dev` are unchanged and still use the plain local `DATABASE_URL`.
 
 Standard Next.js app — deploys cleanly to Vercel, Netlify, or any Node hosting, **over HTTPS** (session cookies are `secure` in production — see Stage P above). Requires the environment variables above (`DATABASE_URL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `CLIENT_SESSION_SECRET`, `NEXT_PUBLIC_APP_URL`) to be set on the host — plus the `emailVerifiedAt` backfill noted above if any clients were activated before Stage K.5, `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` (Stage L2) if you want email actually delivered rather than written to local files, and `FLUTTERWAVE_SECRET_KEY`/`FLUTTERWAVE_SECRET_HASH` (Stage N) before online payments can process anything beyond the mock provider — including completing real Flutterwave merchant onboarding and a live webhook delivery test, neither of which has been done in this environment. Stage M adds no new required environment variables — persistent document storage is an optional future addition (see `lib/documents/storage.ts`). Confirm your host's reverse proxy strips inbound `X-Forwarded-For` before relying on this app's rate limiting (see Stage P above).
 

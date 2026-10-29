@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getConsultationsList } from "@/lib/consultations/data";
 import { ConsultationStatus } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Consultations — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function AdminConsultationsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

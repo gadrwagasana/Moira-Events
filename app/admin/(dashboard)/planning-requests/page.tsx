@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getPlanningRequestsList } from "@/lib/planning-requests/data";
 import { PlanningRequestStatus, TaskPriority } from "@/lib/generated/prisma/client";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Planning Requests — Moira Events Admin" };
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function AdminPlanningRequestsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; priority?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "";

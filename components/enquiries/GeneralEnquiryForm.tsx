@@ -1,15 +1,25 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import Link from "next/link";
 import { submitGeneralEnquiry } from "@/app/(site)/request-a-quote/actions";
 import { initialGeneralEnquiryState } from "@/app/(site)/request-a-quote/types";
 import { siteConfig } from "@/lib/content/config";
 import { divisions } from "@/lib/content/divisions";
 import { RequiredMark } from "@/components/RequiredMark";
+import { Spinner } from "@/components/Spinner";
 import { trackEvent } from "@/lib/tracking/events";
 
 type ServiceOption = { id: string; name: string };
 type Division = "PARTY" | "CORPORATE" | "GENERAL";
+// Not a real submittable value for this form — selecting it hands the
+// visitor off to the dedicated Weddings enquiry form instead (which
+// collects wedding-specific fields, e.g. wedding type and ceremony/
+// reception locations, that this general form was never built to
+// capture). Kept out of the `Division` type/divisionEnum on the server
+// (app/(site)/request-a-quote/actions.ts) on purpose — this is a client-
+// side-only routing choice, never a value actually submitted.
+const WEDDING_HANDOFF = "WEDDING_HANDOFF";
 
 const partyCategories = divisions.find((d) => d.slug === "parties-social-events")!.categories;
 const corporateCategories = divisions.find((d) => d.slug === "corporate-events")!.categories;
@@ -28,7 +38,7 @@ export function GeneralEnquiryForm({
   corporateServices: ServiceOption[];
 }) {
   const [state, formAction, isPending] = useActionState(submitGeneralEnquiry, initialGeneralEnquiryState);
-  const [division, setDivision] = useState<Division>(defaultDivision);
+  const [division, setDivision] = useState<Division | typeof WEDDING_HANDOFF>(defaultDivision);
   const [showOtherNote, setShowOtherNote] = useState(false);
 
   useEffect(() => {
@@ -48,7 +58,7 @@ export function GeneralEnquiryForm({
       <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-8 text-center">
         <p className="label-eyebrow mb-3">Request Received</p>
         <h2 className="font-serif text-2xl text-espresso-700">We&rsquo;ve Received Your Request</h2>
-        <p className="mt-4 text-ink/70">
+        <p className="mt-4 text-ink-muted">
           Thank you for choosing Moira Events. Our team will review your event requirements and contact you
           regarding the next steps.
         </p>
@@ -81,6 +91,7 @@ export function GeneralEnquiryForm({
 
   const services = division === "PARTY" ? partyServices : division === "CORPORATE" ? corporateServices : [];
   const categories = division === "PARTY" ? partyCategories : division === "CORPORATE" ? corporateCategories : [];
+  const isWeddingHandoff = division === WEDDING_HANDOFF;
 
   return (
     <form action={formAction} className="space-y-8">
@@ -94,15 +105,28 @@ export function GeneralEnquiryForm({
           className="field-input"
           name="division"
           value={division}
-          onChange={(e) => setDivision(e.target.value as Division)}
+          onChange={(e) => setDivision(e.target.value as Division | typeof WEDDING_HANDOFF)}
         >
+          <option value="WEDDING_HANDOFF">Wedding</option>
           <option value="PARTY">Party / Social Event</option>
           <option value="CORPORATE">Corporate Event</option>
           <option value="GENERAL">Other</option>
         </select>
-        <p className="text-xs text-ink/50">Planning a wedding? Visit the dedicated Weddings page instead.</p>
       </fieldset>
 
+      {isWeddingHandoff ? (
+        <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-6 text-center">
+          <p className="font-serif text-lg text-espresso-700">Let&rsquo;s plan your wedding</p>
+          <p className="mt-2 text-sm text-ink-muted">
+            Weddings get their own form so we can capture everything that matters — wedding type, ceremony and
+            reception details, and more — right from the start.
+          </p>
+          <Link href="/weddings#enquiry-form" className="btn-primary mt-4 inline-flex">
+            Go to the Wedding Enquiry Form
+          </Link>
+        </div>
+      ) : (
+        <>
       <fieldset className="space-y-4">
         <legend className="label-eyebrow mb-2">Contact Information</legend>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -113,6 +137,7 @@ export function GeneralEnquiryForm({
               id="fullName"
               name="fullName"
               type="text"
+              autoComplete="name"
               required
               aria-invalid={!!fieldErrors(state.errors, "fullName")}
               aria-describedby={fieldErrors(state.errors, "fullName") ? "fullName-error" : undefined}
@@ -128,6 +153,7 @@ export function GeneralEnquiryForm({
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required
               aria-invalid={!!fieldErrors(state.errors, "email")}
               aria-describedby={fieldErrors(state.errors, "email") ? "email-error" : undefined}
@@ -145,6 +171,8 @@ export function GeneralEnquiryForm({
               id="phone"
               name="phone"
               type="tel"
+              autoComplete="tel"
+              inputMode="tel"
               required
               aria-invalid={!!fieldErrors(state.errors, "phone")}
               aria-describedby={fieldErrors(state.errors, "phone") ? "phone-error" : undefined}
@@ -155,7 +183,7 @@ export function GeneralEnquiryForm({
           </div>
           <div>
             <label className="field-label" htmlFor="whatsapp">WhatsApp (optional)</label>
-            <input className="field-input" id="whatsapp" name="whatsapp" type="tel" />
+            <input className="field-input" id="whatsapp" name="whatsapp" type="tel" autoComplete="tel" inputMode="tel" />
           </div>
         </div>
         <div>
@@ -197,7 +225,7 @@ export function GeneralEnquiryForm({
           </div>
           <div>
             <label className="field-label" htmlFor="location">Location</label>
-            <input className="field-input" id="location" name="location" type="text" />
+            <input className="field-input" id="location" name="location" type="text" autoComplete="address-level2" />
           </div>
         </fieldset>
       )}
@@ -269,9 +297,12 @@ export function GeneralEnquiryForm({
         </div>
       </fieldset>
 
-      <button type="submit" className="btn-primary w-full sm:w-auto" disabled={isPending}>
+      <button type="submit" className="btn-primary w-full gap-2 sm:w-auto" disabled={isPending}>
+        {isPending && <Spinner />}
         {isPending ? "Submitting..." : "Request My Quote"}
       </button>
+        </>
+      )}
     </form>
   );
 }

@@ -27,7 +27,7 @@ export function Faq({ items }: { items: FaqItem[] }) {
                 +
               </span>
             </summary>
-            <p className="mt-3 text-sm text-ink/70">{item.answer}</p>
+            <p className="mt-3 text-sm text-ink-muted">{item.answer}</p>
           </details>
         ))}
       </div>

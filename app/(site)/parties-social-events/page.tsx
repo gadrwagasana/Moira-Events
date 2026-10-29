@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DivisionPageTemplate } from "@/components/DivisionPageTemplate";
 import { divisions } from "@/lib/content/divisions";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "Parties & Social Events",
@@ -11,6 +12,20 @@ export const metadata: Metadata = {
 
 const division = divisions.find((d) => d.slug === "parties-social-events")!;
 
-export default function PartiesSocialEventsPage() {
-  return <DivisionPageTemplate division={division} />;
+export default async function PartiesSocialEventsPage() {
+  const copy = await getSiteCopy();
+  return (
+    <DivisionPageTemplate
+      division={division}
+      heroEyebrowOverride={copy["parties.hero.eyebrow"]}
+      heroHeadlineOverride={copy["parties.hero.headline"]}
+      heroBodyOverride={copy["parties.hero.body"]}
+      categoriesHeadingOverride={copy["parties.categories.heading"]}
+      servicesHeadingOverride={copy["parties.services.heading"]}
+      experienceHeadingOverride={copy["parties.experience.heading"]}
+      experienceTaglineOverride={copy["parties.experience.tagline"]}
+      experienceBodyOverride={copy["parties.experience.body"]}
+      ctaHeadingOverride={copy["parties.cta.heading"]}
+    />
+  );
 }

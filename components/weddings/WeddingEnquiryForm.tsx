@@ -6,6 +6,7 @@ import { initialWeddingEnquiryState, type WeddingEnquiryState } from "@/app/(sit
 import { weddingEnquiryFieldConfig as f } from "@/lib/content/wedding-enquiry-fields";
 import { siteConfig } from "@/lib/content/config";
 import { RequiredMark } from "@/components/RequiredMark";
+import { Spinner } from "@/components/Spinner";
 import { trackEvent } from "@/lib/tracking/events";
 
 // Human-readable labels for the Review & Submit summary — keyed by the
@@ -121,7 +122,7 @@ export function WeddingEnquiryForm({
       <div className="rounded-xl border border-espresso-200 bg-ivory-50 p-8 text-center">
         <p className="label-eyebrow mb-3">Request Received</p>
         <h2 className="font-serif text-2xl text-espresso-700">We&rsquo;ve Received Your Wedding Request</h2>
-        <p className="mt-4 text-ink/70">
+        <p className="mt-4 text-ink-muted">
           Thank you for choosing Moira Events. Our team will review your event requirements and contact you
           regarding the next steps.
         </p>
@@ -217,6 +218,7 @@ export function WeddingEnquiryForm({
               id="fullName"
               name="fullName"
               type="text"
+              autoComplete="name"
               required={f.fullName.required}
               aria-invalid={!!fieldErrors(state, "fullName")}
               aria-describedby={fieldErrors(state, "fullName") ? "fullName-error" : undefined}
@@ -230,6 +232,7 @@ export function WeddingEnquiryForm({
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required={f.email.required}
               aria-invalid={!!fieldErrors(state, "email")}
               aria-describedby={fieldErrors(state, "email") ? "email-error" : undefined}
@@ -245,6 +248,8 @@ export function WeddingEnquiryForm({
               id="phone"
               name="phone"
               type="tel"
+              autoComplete="tel"
+              inputMode="tel"
               required={f.phone.required}
               aria-invalid={!!fieldErrors(state, "phone")}
               aria-describedby={fieldErrors(state, "phone") ? "phone-error" : undefined}
@@ -253,7 +258,7 @@ export function WeddingEnquiryForm({
           </div>
           <div>
             <label className="field-label" htmlFor="whatsapp">WhatsApp (optional)</label>
-            <input className="field-input" id="whatsapp" name="whatsapp" type="tel" required={f.whatsapp.required} />
+            <input className="field-input" id="whatsapp" name="whatsapp" type="tel" autoComplete="tel" inputMode="tel" required={f.whatsapp.required} />
           </div>
         </div>
         <div>
@@ -302,7 +307,7 @@ export function WeddingEnquiryForm({
         </div>
         <div>
           <label className="field-label" htmlFor="location">Location</label>
-          <input className="field-input" id="location" name="location" type="text" required={f.location.required} />
+          <input className="field-input" id="location" name="location" type="text" autoComplete="address-level2" required={f.location.required} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -427,7 +432,7 @@ export function WeddingEnquiryForm({
       {/* Step 6 — Review & Submit */}
       <div ref={(el) => { stepRefs.current[5] = el; }} className={currentStep === 5 ? "space-y-4" : "hidden"}>
         <h2 className="font-serif text-xl text-espresso-700">Review &amp; Submit</h2>
-        <p className="text-sm text-ink/70">
+        <p className="text-sm text-ink-muted">
           Please confirm your details are correct using the steps above, then submit your request. The Moira
           Events team will review your event requirements and contact you regarding the next steps.
         </p>
@@ -463,7 +468,8 @@ export function WeddingEnquiryForm({
             Next
           </button>
         ) : (
-          <button type="submit" className="btn-primary" disabled={isPending}>
+          <button type="submit" className="btn-primary gap-2" disabled={isPending}>
+            {isPending && <Spinner />}
             {isPending ? "Submitting..." : "Request My Quote"}
           </button>
         )}

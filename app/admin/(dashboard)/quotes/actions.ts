@@ -16,6 +16,7 @@ import { sendTrackedEmail, type SendEmailFormState } from "@/lib/email/outbox";
 import { isQuoteSendable } from "@/lib/quotes/send-guard";
 import { auditEventQuery, recordAuditEvent } from "@/lib/audit/log";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefined : val);
 
@@ -23,6 +24,7 @@ const emptyToUndefined = (val: unknown) => (val === "" || val === null ? undefin
 // ("what Moira Events proposes") that inherits from it once, then lives
 // independently — editing the quote never touches the original enquiry.
 export async function createQuoteFromEnquiry(enquiryId: string) {
+  await requireAdminRole("ADMIN");
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
     include: { services: { include: { service: true } } },
@@ -92,6 +94,7 @@ const detailsSchema = z.object({
 });
 
 export async function updateQuoteDetails(quoteId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = detailsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -138,6 +141,7 @@ const addItemSchema = z
   });
 
 export async function addQuoteItem(quoteId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = addItemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -186,6 +190,7 @@ const updateItemSchema = z.object({
 });
 
 export async function updateQuoteItem(itemId: string, quoteId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = updateItemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -210,6 +215,7 @@ export async function updateQuoteItem(itemId: string, quoteId: string, formData:
 }
 
 export async function deleteQuoteItem(itemId: string, quoteId: string) {
+  await requireAdminRole("ADMIN");
   await prisma.$transaction(async (tx) => {
     await tx.quoteItem.delete({ where: { id: itemId } });
     await recalculateQuoteTotals(quoteId, tx);
@@ -252,6 +258,7 @@ const enquiryStatusForQuoteStatus: Partial<Record<QuoteStatus, EnquiryStatus>> =
 };
 
 export async function updateQuoteStatus(quoteId: string, formData: FormData) {
+  await requireAdminRole("ADMIN");
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
@@ -329,6 +336,7 @@ export async function sendQuoteEmail(
   _prevState: SendEmailFormState,
   formData: FormData,
 ): Promise<SendEmailFormState> {
+  await requireAdminRole("ADMIN");
   const requestId = String(formData.get("requestId") ?? "");
   if (!requestId) return { status: "error", message: "Missing request id — please reload the page and try again." };
 

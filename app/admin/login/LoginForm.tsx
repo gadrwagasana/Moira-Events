@@ -12,6 +12,21 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div>
+        <label className="field-label" htmlFor="email">Email</label>
+        <input
+          className="field-input"
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoFocus
+          autoComplete="username"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      </div>
+      <div>
         <label className="field-label" htmlFor="password">Password</label>
         <div className="relative">
           <input
@@ -20,7 +35,7 @@ export function LoginForm() {
             name="password"
             type={showPassword ? "text" : "password"}
             required
-            autoFocus
+            autoComplete="current-password"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}

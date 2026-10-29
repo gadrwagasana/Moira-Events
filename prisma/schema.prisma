@@ -1006,3 +1006,481 @@ model DocumentRecord {
   @@index([type, relatedRecordId])
   @@index([createdAt])
 }
+
+// =============================================================================
+// CMS Phase 1 — Admin identity + CMS data model (additive, NOT YET WIRED IN).
+//
+// This stage replaces the single shared ADMIN_PASSWORD env var with real
+// individual administrator accounts (role: ADMIN | EDITOR), and lays the CMS
+// data model on top. IMPORTANT: no migration for any of what follows has
+// been applied (or even diffed against a live database) — `proxy.ts`,
+// `app/admin/login/actions.ts`, `lib/admin/session.ts`, and
+// `app/admin/(dashboard)/layout.tsx` are all unchanged and still run the old
+// shared-password system exactly as before. See SETUP.md ("CMS Phase 1") for
+// the exact cutover sequence required before any of this becomes live.
+// =============================================================================
+
+enum AdminRole {
+  ADMIN
+  EDITOR
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(EDITOR)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  cmsPages        CmsPage[]
+  blogPosts       BlogPost[]
+  mediaAssets     MediaAsset[]
+  siteImageSlots  SiteImageSlot[]
+  portfolioItems  PortfolioItem[]
+  settingsUpdates SiteSettings[]
+  testimonials    Testimonial[]
+  siteCopyUpdates SiteCopy[]
+}
+
+enum CmsContentStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+model CmsPage {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  title           String
+  metaDescription String?
+  ogImageId       String?
+  // First Restrict (not SetNull, Prisma's default for a nullable FK) in
+  // this schema — deliberate: media still referenced by a published page's
+  // OG image must not be deletable out from under it.
+  ogImage         MediaAsset?      @relation(fields: [ogImageId], references: [id], onDelete: Restrict)
+  // Marks one of the fixed, pre-existing public pages (Home, About,
+  // Services, etc.) once migrated into the CMS — enforced in
+  // lib/cms/actions.ts: slug changes are rejected for a system page (the
+  // route it renders is a real, linked-to Next.js route, not a freeform
+  // [slug] catch-all match), and it's excluded from any future page-delete
+  // action. Also used for the seeded Privacy Policy / Terms & Conditions
+  // legal pages, for the same "slug must not drift" reason.
+  isSystemPage    Boolean          @default(false)
+  // Per-page SEO override — excluded from indexing without being
+  // unpublished (e.g. a page you want reachable but not search-ranked).
+  noindex         Boolean          @default(false)
+  status          CmsContentStatus @default(DRAFT)
+  publishedAt     DateTime?
+  // Free text ("admin") is NOT used here, unlike every pre-CMS model —
+  // Admin identity now exists, so this is a real FK, not a placeholder
+  // string. Nullable because content predating any author assignment (or
+  // created by a since-disabled account) must not become unrenderable.
+  authorId        String?
+  author          Admin?           @relation(fields: [authorId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  sections        CmsPageSection[]
+  navigationItems NavigationItem[]
+
+  @@index([status])
+}
+
+model CmsPageSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      CmsPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  // Free-text block-type discriminator (e.g. "richtext", "hero",
+  // "imageGrid") — the renderer's allow-list, not this column, is what
+  // actually constrains what can execute (components/cms/RichTextRenderer.tsx).
+  type      String
+  sortOrder Int      @default(0)
+  // Structured block content (Tiptap JSON for richtext blocks, plain JSON
+  // for others) — Json columns are already precedented in this schema
+  // (QuoteRevision.snapshot), not a new capability being introduced here.
+  content   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+}
+
+model BlogPost {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  title           String
+  excerpt         String?
+  // Tiptap JSON output — rendered only through
+  // components/cms/RichTextRenderer.tsx's strict allow-list, never
+  // dangerouslySetInnerHTML on raw HTML.
+  bodyRichText    Json
+  featuredMediaId String?
+  featuredMedia   MediaAsset?      @relation(fields: [featuredMediaId], references: [id], onDelete: Restrict)
+  seoTitle        String?
+  seoDescription  String?
+  noindex         Boolean          @default(false)
+  status          CmsContentStatus @default(DRAFT)
+  publishedAt     DateTime?
+  authorId        String?
+  author          Admin?           @relation(fields: [authorId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([status])
+}
+
+// No BlogCategory model this phase (owner-approved deferral) and no
+// CmsPageRevision/BlogPostRevision model (owner-approved deferral) — a flat
+// post list and no edit-history/rollback, by explicit decision, not
+// oversight.
+
+model MediaAsset {
+  id              String    @id @default(cuid())
+  // "vercel-blob" once wired up (lib/media/provider.ts) — a free-text
+  // column, same pattern as Payment.provider, so swapping providers later
+  // never requires a schema change.
+  storageProvider String
+  storageKey      String
+  url             String
+  altText         String?
+  mimeType        String
+  fileSizeBytes   Int
+  width           Int?
+  height          Int?
+  uploadedById    String?
+  uploadedBy      Admin?    @relation(fields: [uploadedById], references: [id])
+  // Soft-delete marker — Restrict above already makes a referenced asset
+  // impossible to hard-delete via Prisma; this lets "delete" on an
+  // unreferenced asset still preserve storageKey/url history instead of
+  // losing it outright. Queries should filter deletedAt: null.
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  cmsPages  CmsPage[]
+  blogPosts BlogPost[]
+}
+
+// A fixed set of named, CMS-managed image slots on otherwise-hardcoded
+// public pages (homepage hero, the three service-division cards, the "Why
+// Moira Events" image, each division page's two image slots) — edited from
+// Admin → Pages → Images, not through the generic CmsPage/CmsPageSection
+// system, since these are specific, fixed positions on specific existing
+// pages rather than freeform page content.
+//
+// `imageUrl` is a plain external URL, not a MediaAsset reference — there is
+// no real upload pipeline yet (lib/media/provider.ts is still a no-op seam,
+// Vercel Blob was explicitly deferred pending separate approval/setup), so
+// for now an editor pastes a URL to an already-hosted image rather than
+// uploading a file directly. Switching this to reference MediaAsset once
+// real uploads exist is a natural, non-breaking follow-up (add the column,
+// backfill, deprecate imageUrl) — not something to half-build now against
+// a storage backend that doesn't exist.
+model SiteImageSlot {
+  id          String   @id @default(cuid())
+  // One of a fixed, known set of keys (see lib/site-images/slots.ts):
+  // "home-hero", "home-why-moira", "division-weddings",
+  // "division-parties-social-events", "division-corporate-events".
+  key         String   @unique
+  imageUrl    String?
+  // Required by the admin UI whenever imageUrl is set — never optional once
+  // there's an actual image for it to describe.
+  alt         String?
+  // Only shown publicly when it differs from the section's own heading —
+  // this field existing and being equal to the heading is treated the same
+  // as it being absent (CmsImage's caller decides that comparison).
+  caption     String?
+  // Percent (0-100) — translated to CSS `object-position` so an editor can
+  // keep the subject in frame on a fixed-aspect-ratio crop.
+  focalX      Int      @default(50)
+  focalY      Int      @default(50)
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   Admin?   @relation(fields: [updatedById], references: [id])
+}
+
+// Fixed-key text overrides for existing, hand-built page copy — the text
+// analog of SiteImageSlot above, same shape and same philosophy: a known,
+// fixed set of keys (not arbitrary admin-created rows), a nullable value
+// (null/absent = no override, the page falls back to its hardcoded
+// default in lib/content/*.ts), and the same updatedAt/updatedBy
+// attribution. Starts with the five Homepage hero keys
+// ("home.hero.eyebrow", "home.hero.headline", "home.hero.body",
+// "home.hero.primaryCtaLabel", "home.hero.secondaryCtaLabel" — see
+// lib/site-copy/keys.ts); future pages add more keys to this same table,
+// never a new model per page.
+model SiteCopy {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   Admin?   @relation(fields: [updatedById], references: [id])
+}
+
+// Public portfolio case studies — a real, admin-editable list (unlike the
+// fixed SiteImageSlot keys above). Reuses the existing EventType enum
+// (Enquiry/Event) rather than inventing a parallel classification, since
+// "which division" is the same concept either way.
+model PortfolioItem {
+  id          String    @id @default(cuid())
+  title       String
+  eventType   EventType
+  guestCount  Int?
+  venueOrCity String?
+  story       String?
+  imageUrl    String?
+  alt         String?
+  // Per the explicit rule: an item with neither an image nor a description
+  // is not publishable — enforced in lib/site-images/actions.ts, not just
+  // documented here.
+  published   Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  authorId    String?
+  author      Admin?    @relation(fields: [authorId], references: [id])
+
+  @@index([published])
+}
+
+// ============================================================================
+// Global site layer (Settings/Navigation/Collections/Redirects) — additive,
+// built on top of the existing CMS models above. Site-wide singleton
+// configuration, menu/footer structure, and the six reusable content
+// collections replacing what was previously hardcoded in lib/content/*.
+// Roles/permissions expansion and full i18n were explicitly deferred to
+// their own separate passes (owner decision) — nothing here assumes either
+// yet: every new model still uses the existing two-role Admin/AdminRole
+// system, and every text field is a single plain String (English only).
+// ============================================================================
+
+// Deliberately a true singleton: id is always 1 (enforced at the
+// application layer in lib/settings/data.ts via an upsert-by-fixed-id
+// pattern, not by a DB constraint — Prisma has no native "exactly one row"
+// constraint short of a check constraint this project's migration
+// convention doesn't otherwise use). One record holds every tab shown in
+// /admin/settings (Brand/Contact/Social/CTAs/SEO/Notifications) plus the
+// announcement bar, maintenance mode, and cookie-consent text — all
+// genuinely singular, site-wide values, not a list of anything.
+model SiteSettings {
+  id Int @id @default(1)
+
+  // Brand
+  siteName   String  @default("Moira Events")
+  logoUrl    String?
+  faviconUrl String?
+
+  // Contact — phoneE164 stored as the actual E.164 value (e.g.
+  // "+250787553323"); the "+250 787 553 323" display form is derived at
+  // render time (lib/settings/format.ts), never stored separately, so the
+  // two can never drift out of sync.
+  phoneE164          String?
+  contactEmail       String?
+  whatsappNumber     String?
+  addressLine        String?
+  // No specific city has ever been confirmed for this business (see
+  // lib/content/config.ts's own long-standing note) — left optional and
+  // empty by default; never defaulted to a fabricated value.
+  city               String?
+  openingHours       String?
+  googleMapsUrl      String?
+
+  // Social
+  instagramUrl String?
+  facebookUrl  String?
+  tiktokUrl    String?
+  linkedinUrl  String?
+  youtubeUrl   String?
+
+  // CTAs
+  primaryCtaLabel   String?
+  primaryCtaHref    String?
+  secondaryCtaLabel String?
+  secondaryCtaHref  String?
+
+  // SEO defaults
+  titleTemplate          String  @default("%s | Moira Events")
+  defaultMetaDescription String?
+  defaultOgImageUrl      String?
+  gscVerification        String?
+  ga4Id                  String?
+  metaPixelId            String?
+
+  // Notifications (per-form recipient + auto-reply)
+  quoteRecipientEmail         String?
+  consultationRecipientEmail  String?
+  contactRecipientEmail       String?
+  quoteAutoReplyTemplate      String?
+  consultationAutoReplyTemplate String?
+  contactAutoReplyTemplate    String?
+  whatsappSmsNotifyEnabled    Boolean @default(false)
+
+  // Announcement bar — one at a time, by design (the ticket describes it
+  // in the singular); start/end are read, not enforced by a DB constraint,
+  // at render time in components/AnnouncementBar.tsx.
+  announcementText        String?
+  announcementLink        String?
+  announcementColor       String?
+  announcementStartAt     DateTime?
+  announcementEndAt       DateTime?
+  announcementDismissible Boolean   @default(true)
+
+  // Maintenance mode — checked in proxy.ts for every public (non-admin,
+  // non-portal) request; logged-in staff bypass it (same signed admin
+  // cookie proxy.ts already verifies for /admin).
+  maintenanceModeEnabled Boolean @default(false)
+  maintenanceMessage     String?
+
+  // Cookie consent
+  cookieConsentText String?
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   Admin?   @relation(fields: [updatedById], references: [id])
+}
+
+enum NavLocation {
+  HEADER
+  FOOTER
+}
+
+// Shared by both the header menu and the footer builder (location
+// distinguishes them) and reuses the exact same one-level parent/child
+// shape for two different purposes: in HEADER, a top-level item with
+// children is a dropdown (e.g. "Our Events"); in FOOTER, a top-level item
+// with children is a link column (the column header has no href of its
+// own) and a top-level item with no children is a flat link (e.g. a legal
+// link placed directly in the footer, not inside a column).
+model NavigationItem {
+  id        String          @id @default(cuid())
+  label     String
+  href      String?
+  cmsPageId String?
+  cmsPage   CmsPage?        @relation(fields: [cmsPageId], references: [id], onDelete: SetNull)
+  location  NavLocation
+  parentId  String?
+  parent    NavigationItem? @relation("NavigationItemChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children  NavigationItem[] @relation("NavigationItemChildren")
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([location])
+}
+
+// 301 by default (the correct status for "this moved permanently," which
+// is the only case lib/cms/actions.ts auto-creates one for — see
+// createRedirectForSlugChange). Manually-added redirects may use 302.
+// Applied in proxy.ts, checked before any other routing for the public
+// site (never for /admin or /portal — an admin mistyping their own URLs
+// should see a real 404, not a silently "working" redirect).
+model Redirect {
+  id         String   @id @default(cuid())
+  fromPath   String   @unique
+  toPath     String
+  statusCode Int      @default(301)
+  createdAt  DateTime @default(now())
+}
+
+model Testimonial {
+  id                 String     @id @default(cuid())
+  clientName         String
+  eventType          EventType?
+  quote              String
+  rating             Int?
+  photoUrl           String?
+  alt                String?
+  featuredOnHomepage Boolean    @default(false)
+  published          Boolean    @default(false)
+  sortOrder          Int        @default(0)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  authorId           String?
+  author             Admin?     @relation(fields: [authorId], references: [id])
+
+  @@index([published])
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  // Free text (e.g. "contact", "weddings") rather than an enum — the same
+  // reasoning as CmsPageSection.type: a closed set here would need a
+  // migration every time a new page wants its own FAQ category, for a
+  // field that's purely a display-grouping label, not a security boundary.
+  category  String?
+  published Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+}
+
+model ServicePackage {
+  id               String     @id @default(cuid())
+  name             String
+  eventType        EventType?
+  shortDescription String?
+  // Plain string array (Prisma's native Json type, stored as a JSON array
+  // of strings) — a fixed list of short bullet points, not structured data
+  // that needs its own table.
+  inclusions       Json       @default("[]")
+  // Minor units (e.g. RWF has no further subdivision in practice, but
+  // storing as an integer "from" amount avoids float-precision issues
+  // entirely regardless of currency) — optional because not every package
+  // has published pricing yet (confirmed elsewhere in this app: "Packages
+  // and published pricing are coming soon").
+  fromPriceMinor   Int?
+  currency         String?    @default("RWF")
+  published        Boolean    @default(false)
+  sortOrder        Int        @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([published])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  photoUrl  String?
+  alt       String?
+  bio       String?
+  published Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String?
+  alt       String?
+  url       String?
+  published Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+}
+
+model Stat {
+  id        String   @id @default(cuid())
+  label     String
+  value     String
+  published Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+}

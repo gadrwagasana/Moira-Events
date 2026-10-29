@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { SiteFooter } from "@/components/SiteFooter";
 import { OrganizationJsonLd } from "@/components/OrganizationJsonLd";
 
 // Sitewide Open Graph/Twitter defaults for the public marketing site only
@@ -34,7 +35,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <main id="main-content" className="flex-1">
         {children}
       </main>
-      <Footer />
+      <SiteFooter footerWithCta={<Footer showCta />} footerWithoutCta={<Footer showCta={false} />} />
     </div>
   );
 }

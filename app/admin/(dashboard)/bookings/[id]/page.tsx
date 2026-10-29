@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
+import { withDbRetry } from "@/lib/db-retry";
 import { getBookingDetail, findOtherBookingsOnSameDate } from "@/lib/bookings/data";
 import { getLatestEmailDelivery } from "@/lib/email/outbox";
 import { SendConfirmationButton } from "./SendConfirmationButton";
@@ -28,6 +29,7 @@ import { PaymentStatus } from "@/lib/generated/prisma/client";
 import { recordPayment } from "../../payments/actions";
 import { createInvoiceFromBooking } from "../../invoices/actions";
 import { generateClientPortalInvite } from "../../clients/actions";
+import { requireAdminRole } from "@/lib/admin/auth";
 
 const TIMELINE_TYPE_SUGGESTIONS = ["Planning", "Meeting", "Vendor", "Venue", "Rehearsal", "Event Day", "Other"];
 
@@ -56,18 +58,25 @@ export default async function AdminBookingDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ invite?: string }>;
 }) {
+  await requireAdminRole("ADMIN");
   const { id } = await params;
   const { invite: oneTimeInviteToken } = await searchParams;
   const booking = await getBookingDetail(id);
   if (!booking) notFound();
 
-  const [otherBookingsSameDate, nextStatuses, availableVendors] = await Promise.all([
-    findOtherBookingsOnSameDate(booking.id, booking.eventDate),
-    Promise.resolve(getValidNextStatuses(booking.status)),
+  // Sequential, not Promise.all — the main booking record above already used
+  // one connection; firing several more in parallel immediately after is
+  // exactly the kind of concurrent-connection burst that triggers "Server
+  // has closed the connection" (see the enquiry detail page for the same
+  // pattern and rationale).
+  const nextStatuses = getValidNextStatuses(booking.status);
+  const otherBookingsSameDate = await withDbRetry(() => findOtherBookingsOnSameDate(booking.id, booking.eventDate));
+  const availableVendors = await withDbRetry(() =>
     prisma.vendorRecommendation.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-  ]);
+  );
 
   const { client, event, quote, weddingType } = booking;
+  const lastInviteEmail = await getLatestEmailDelivery("CLIENT_INVITATION", client.id);
   const paymentSummary = computePaymentSummary(booking.agreedTotal, booking.payments);
   const recommendedVendorIds = new Set(booking.vendorRecommendations.map((bv) => bv.vendorRecommendationId));
   const unrecommendedVendors = availableVendors.filter((v) => !recommendedVendorIds.has(v.id));
@@ -221,6 +230,23 @@ export default async function AdminBookingDetailPage({
           )}
         </p>
 
+        {client.pendingEmail && (
+          <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            Email change pending: the client requested to switch to <strong>{client.pendingEmail}</strong>, awaiting
+            verification of the new address.
+          </p>
+        )}
+
+        {client.inviteTokenHash && !oneTimeInviteToken && (
+          <p className="mb-3 text-xs text-ink/50">
+            A previously-generated invite/reset link exists for this client —{" "}
+            {client.inviteTokenExpiresAt && client.inviteTokenExpiresAt > new Date()
+              ? `still valid until ${client.inviteTokenExpiresAt.toLocaleString()}`
+              : "it has expired"}
+            . Generate a new one below if needed; the raw link itself can no longer be displayed.
+          </p>
+        )}
+
         {oneTimeInviteToken && (
           <div className="mb-3 rounded-lg bg-ivory-100 p-3 text-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-ink/50">Invite Link</p>
@@ -241,6 +267,15 @@ export default async function AdminBookingDetailPage({
             {client.passwordHash ? "Generate New Invite / Reset Link" : "Generate Invite Link"}
           </button>
         </form>
+
+        {lastInviteEmail && (
+          <p className="mt-3 text-xs text-ink/50">
+            Last invitation email sent {lastInviteEmail.createdAt.toLocaleString()} to {lastInviteEmail.recipientEmail} —{" "}
+            <span className={lastInviteEmail.status === "FAILED" ? "text-red-600" : "text-ink/60"}>
+              {lastInviteEmail.status === "FAILED" ? `Failed: ${lastInviteEmail.lastError}` : lastInviteEmail.status}
+            </span>
+          </p>
+        )}
       </section>
 
       {/* Timeline */}
@@ -276,10 +311,18 @@ export default async function AdminBookingDetailPage({
                     <form action={updateTimelineItem.bind(null, item.id, booking.id)} className="mt-3 space-y-2">
                       <input className="field-input" name="title" defaultValue={item.title} required />
                       <textarea className="field-input" name="description" rows={2} defaultValue={item.description ?? ""} />
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="grid gap-2 sm:grid-cols-4">
                         <input className="field-input" name="date" type="date" defaultValue={dateInputValue(item.date)} />
                         <input className="field-input" name="time" type="time" defaultValue={timeInputValue(item.date)} />
                         <input className="field-input" name="type" list="timeline-type-suggestions" defaultValue={item.type ?? ""} placeholder="Type" />
+                        <input
+                          className="field-input"
+                          name="sortOrder"
+                          type="number"
+                          defaultValue={item.sortOrder}
+                          title="Order among items on the same date/time (lower shows first)"
+                          placeholder="Order"
+                        />
                       </div>
                       <label className="flex items-center gap-2 text-xs">
                         <input type="checkbox" name="clientVisible" defaultChecked={item.clientVisible} />
@@ -317,10 +360,18 @@ export default async function AdminBookingDetailPage({
           <p className="text-xs font-medium uppercase tracking-wide text-ink/50">Add Timeline Item</p>
           <input className="field-input" name="title" placeholder="Title" required />
           <textarea className="field-input" name="description" rows={2} placeholder="Description (optional)" />
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-4">
             <input className="field-input" name="date" type="date" />
             <input className="field-input" name="time" type="time" />
             <input className="field-input" name="type" list="timeline-type-suggestions" placeholder="Type (optional)" />
+            <input
+              className="field-input"
+              name="sortOrder"
+              type="number"
+              defaultValue={0}
+              title="Order among items on the same date/time (lower shows first)"
+              placeholder="Order"
+            />
           </div>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" name="clientVisible" />
