@@ -18,3 +18,6 @@ out
 .agents/
 .claude/
 .windsurf/
+
+.vercel
+.env*

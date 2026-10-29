@@ -5,6 +5,7 @@ import Image from "next/image";
 import { PageHero } from "@/components/PageHero";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { listPublishedBlogPosts } from "@/lib/cms/data";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function BlogListPage() {
-  const posts = await listPublishedBlogPosts();
+  const [posts, copy] = await Promise.all([listPublishedBlogPosts(), getSiteCopy()]);
   // Hidden (404, consistent with how a draft CmsPage/BlogPost is already
   // indistinguishable from nonexistent) rather than shown with an empty
   // state, while there's nothing published yet — matches the sitemap
@@ -25,7 +26,11 @@ export default async function BlogListPage() {
   return (
     <>
       <Breadcrumbs items={[{ label: "Blog", href: "/blog" }]} />
-      <PageHero eyebrow="News & Updates" title="Blog" support="Planning advice and updates from the Moira Events team." />
+      <PageHero
+        eyebrow={copy["blog.hero.eyebrow"] ?? "News & Updates"}
+        title={copy["blog.hero.headline"] ?? "Blog"}
+        support={copy["blog.hero.body"] ?? "Planning advice and updates from the Moira Events team."}
+      />
 
       <section className="section">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">

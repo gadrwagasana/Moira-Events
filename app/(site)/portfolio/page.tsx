@@ -8,6 +8,7 @@ import { PortfolioGallery } from "@/components/PortfolioGallery";
 import { divisions } from "@/lib/content/divisions";
 import { listPublishedPortfolioItems, getAllSiteImageSlots } from "@/lib/site-images/data";
 import { divisionHeroSlotKey } from "@/lib/site-images/slots";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "Portfolio",
@@ -18,15 +19,22 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function PortfolioPage() {
-  const [items, slots] = await Promise.all([listPublishedPortfolioItems(), getAllSiteImageSlots()]);
+  const [items, slots, copy] = await Promise.all([
+    listPublishedPortfolioItems(),
+    getAllSiteImageSlots(),
+    getSiteCopy(),
+  ]);
 
   return (
     <>
       <Breadcrumbs items={[{ label: "Portfolio", href: "/portfolio" }]} />
       <PageHero
-        eyebrow="Our Work"
-        title="Portfolio"
-        support="A look at real events Moira Events has planned — filter by type, or explore what each division offers below."
+        eyebrow={copy["portfolio.hero.eyebrow"] ?? "Our Work"}
+        title={copy["portfolio.hero.headline"] ?? "Portfolio"}
+        support={
+          copy["portfolio.hero.body"] ??
+          "A look at real events Moira Events has planned — filter by type, or explore what each division offers below."
+        }
       />
 
       <section className="section">
@@ -47,8 +55,8 @@ export default async function PortfolioPage() {
       <section className="bg-ivory-200">
         <div className="section">
           <div className="mb-10 text-center md:mb-12">
-            <p className="label-eyebrow mb-3">What We Offer</p>
-            <h2 className="font-serif text-3xl text-espresso-700">Explore by Division</h2>
+            <p className="label-eyebrow mb-3">{copy["portfolio.divisions.eyebrow"] ?? "What We Offer"}</p>
+            <h2 className="font-serif text-3xl text-espresso-700">{copy["portfolio.divisions.heading"] ?? "Explore by Division"}</h2>
           </div>
           <div className="grid gap-8 md:grid-cols-3">
             {divisions.map((division) => (
@@ -76,7 +84,8 @@ export default async function PortfolioPage() {
 
       <section className="section max-w-2xl text-center">
         <p className="text-lg text-ink-muted">
-          Every event is shaped around your vision, your guests, and the moments that matter most.
+          {copy["portfolio.closing.body"] ??
+            "Every event is shaped around your vision, your guests, and the moments that matter most."}
         </p>
         <CTAButtons className="mt-8 justify-center" />
       </section>

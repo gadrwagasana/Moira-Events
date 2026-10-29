@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/PageHero";
 import { ProcessSteps } from "@/components/ProcessSteps";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "How It Works",
@@ -8,13 +9,18 @@ export const metadata: Metadata = {
   alternates: { canonical: "/how-it-works" },
 };
 
-export default function HowItWorksPage() {
+export default async function HowItWorksPage() {
+  const copy = await getSiteCopy();
+
   return (
     <>
       <PageHero
-        eyebrow="Our Process"
-        title="What Happens After You Contact Us?"
-        support="A clear, guided process from first conversation to event day — recommended structure, refined as we grow."
+        eyebrow={copy["how-it-works.hero.eyebrow"] ?? "Our Process"}
+        title={copy["how-it-works.hero.headline"] ?? "What Happens After You Contact Us?"}
+        support={
+          copy["how-it-works.hero.body"] ??
+          "A clear, guided process from first conversation to event day — recommended structure, refined as we grow."
+        }
       />
 
       <section className="section">
@@ -23,7 +29,7 @@ export default function HowItWorksPage() {
 
       <section className="border-t border-espresso-100 bg-espresso-600">
         <div className="section flex flex-col items-center gap-6 text-center">
-          <h2 className="font-serif text-3xl text-ivory-100">Ready for Step One?</h2>
+          <h2 className="font-serif text-3xl text-ivory-100">{copy["how-it-works.cta.heading"] ?? "Ready for Step One?"}</h2>
           <div className="flex flex-wrap justify-center gap-4">
             <a href="/request-a-quote" className="btn bg-ivory-100 text-espresso-700 hover:bg-ivory-200">
               Request a Quote

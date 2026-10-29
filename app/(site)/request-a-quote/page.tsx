@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHero } from "@/components/PageHero";
 import { GeneralEnquiryForm } from "@/components/enquiries/GeneralEnquiryForm";
 import { getServiceOptions } from "@/lib/enquiries/data";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "Request a Quote",
@@ -27,6 +28,7 @@ export default async function RequestAQuotePage({
 }) {
   const params = await searchParams;
   const defaultDivision = (params.type && typeMap[params.type]) || "GENERAL";
+  const copy = await getSiteCopy();
 
   // The service catalogue is a nice-to-have on this form, not a hard
   // requirement — GeneralEnquiryForm already handles an empty services[]
@@ -52,9 +54,12 @@ export default async function RequestAQuotePage({
   return (
     <>
       <PageHero
-        eyebrow="Let's Get Started"
-        title="Request a Quote"
-        support="Share your event details and the Moira Events team will prepare a custom quote tailored to your vision and budget."
+        eyebrow={copy["quote.hero.eyebrow"] ?? "Let's Get Started"}
+        title={copy["quote.hero.headline"] ?? "Request a Quote"}
+        support={
+          copy["quote.hero.body"] ??
+          "Share your event details and the Moira Events team will prepare a custom quote tailored to your vision and budget."
+        }
       />
       <section className="section max-w-2xl">
         <GeneralEnquiryForm

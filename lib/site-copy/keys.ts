@@ -470,6 +470,222 @@ export const SITE_COPY_SLOTS = [
     maxLength: 100,
     default: "Who We Work With",
   },
+  // Book a Consultation page — smallest page in the app: just a PageHero
+  // (shared component, takes plain string props already, no change needed
+  // to it) and ConsultationRequestForm, which is explicitly out of scope
+  // (form fields/validation/submission/success-errors).
+  {
+    key: "consultation.hero.eyebrow",
+    label: "Book a Consultation — Hero Eyebrow",
+    page: "Book a Consultation",
+    pageHref: "/book-a-consultation",
+    maxLength: 100,
+    default: "Let's Talk",
+  },
+  {
+    key: "consultation.hero.headline",
+    label: "Book a Consultation — Hero Headline",
+    page: "Book a Consultation",
+    pageHref: "/book-a-consultation",
+    maxLength: 150,
+    default: "Book a Consultation",
+  },
+  {
+    key: "consultation.hero.body",
+    label: "Book a Consultation — Hero Supporting Text",
+    page: "Book a Consultation",
+    pageHref: "/book-a-consultation",
+    maxLength: 400,
+    default: "Tell us a little about your event and preferred timing — our team will confirm a consultation that works for you.",
+  },
+  // Request a Quote page — a force-dynamic route (re-renders every request),
+  // so the revalidatePath fix in actions.ts doesn't actually matter for this
+  // one page's own caching, but it's still correct/harmless to call it.
+  // GeneralEnquiryForm (its ?type=party/corporate routing, services, fields,
+  // validation) is explicitly out of scope — only the PageHero text above it.
+  {
+    key: "quote.hero.eyebrow",
+    label: "Request a Quote — Hero Eyebrow",
+    page: "Request a Quote",
+    pageHref: "/request-a-quote",
+    maxLength: 100,
+    default: "Let's Get Started",
+  },
+  {
+    key: "quote.hero.headline",
+    label: "Request a Quote — Hero Headline",
+    page: "Request a Quote",
+    pageHref: "/request-a-quote",
+    maxLength: 150,
+    default: "Request a Quote",
+  },
+  {
+    key: "quote.hero.body",
+    label: "Request a Quote — Hero Supporting Text",
+    page: "Request a Quote",
+    pageHref: "/request-a-quote",
+    maxLength: 400,
+    default: "Share your event details and the Moira Events team will prepare a custom quote tailored to your vision and budget.",
+  },
+  // Contact page — hero has no "support" text today (eyebrow + title only).
+  // The FAQ question/answer pairs are deliberately NOT keys here: the
+  // page's own TODO comment above `faqItems` already documents they're
+  // meant to move to a dedicated Faq database collection, and a repeating
+  // list is the wrong shape for Site Copy's fixed-key model regardless.
+  // Email/Phone/WhatsApp/Location micro-headings and link labels are
+  // stable UI chrome, left out to match the restraint shown elsewhere.
+  {
+    key: "contact.hero.eyebrow",
+    label: "Contact — Hero Eyebrow",
+    page: "Contact",
+    pageHref: "/contact",
+    maxLength: 100,
+    default: "Get In Touch",
+  },
+  {
+    key: "contact.hero.headline",
+    label: "Contact — Hero Headline",
+    page: "Contact",
+    pageHref: "/contact",
+    maxLength: 150,
+    default: "Contact Moira Events",
+  },
+  {
+    key: "contact.form.heading",
+    label: "Contact — \"Send a Message\" Heading",
+    page: "Contact",
+    pageHref: "/contact",
+    maxLength: 100,
+    default: "Send a Message",
+  },
+  {
+    key: "contact.faq.heading",
+    label: "Contact — FAQ Section Heading",
+    page: "Contact",
+    pageHref: "/contact",
+    maxLength: 100,
+    default: "Frequently Asked Questions",
+  },
+  // How It Works page — the actual process steps come from the shared
+  // `processSteps` constant (lib/content/company.ts) via <ProcessSteps />,
+  // not this page alone, so they're left out (would need their own small
+  // admin UI, not a fixed key). The "Request a Quote"/"Book a Consultation"
+  // CTA button labels are also left out: identical literal strings reused
+  // in the Header and other pages' CTA bands, not page-specific.
+  {
+    key: "how-it-works.hero.eyebrow",
+    label: "How It Works — Hero Eyebrow",
+    page: "How It Works",
+    pageHref: "/how-it-works",
+    maxLength: 100,
+    default: "Our Process",
+  },
+  {
+    key: "how-it-works.hero.headline",
+    label: "How It Works — Hero Headline",
+    page: "How It Works",
+    pageHref: "/how-it-works",
+    maxLength: 150,
+    default: "What Happens After You Contact Us?",
+  },
+  {
+    key: "how-it-works.hero.body",
+    label: "How It Works — Hero Supporting Text",
+    page: "How It Works",
+    pageHref: "/how-it-works",
+    maxLength: 400,
+    default: "A clear, guided process from first conversation to event day — recommended structure, refined as we grow.",
+  },
+  {
+    key: "how-it-works.cta.heading",
+    label: "How It Works — Closing CTA Heading",
+    page: "How It Works",
+    pageHref: "/how-it-works",
+    maxLength: 100,
+    default: "Ready for Step One?",
+  },
+  // Portfolio page — the "See {division} in detail" link label is
+  // deliberately NOT a key: division.shortName is interpolated into it
+  // per card, so it can't default to one fixed string the way a genuinely
+  // identical label (e.g. services.division.ctaLabel) can. Gallery items,
+  // division name/summary/image, and CTAButtons are all database-managed
+  // or shared, left untouched.
+  {
+    key: "portfolio.hero.eyebrow",
+    label: "Portfolio — Hero Eyebrow",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 100,
+    default: "Our Work",
+  },
+  {
+    key: "portfolio.hero.headline",
+    label: "Portfolio — Hero Headline",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 150,
+    default: "Portfolio",
+  },
+  {
+    key: "portfolio.hero.body",
+    label: "Portfolio — Hero Supporting Text",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 400,
+    default: "A look at real events Moira Events has planned — filter by type, or explore what each division offers below.",
+  },
+  {
+    key: "portfolio.divisions.eyebrow",
+    label: "Portfolio — \"Explore by Division\" Eyebrow",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 100,
+    default: "What We Offer",
+  },
+  {
+    key: "portfolio.divisions.heading",
+    label: "Portfolio — \"Explore by Division\" Heading",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 100,
+    default: "Explore by Division",
+  },
+  {
+    key: "portfolio.closing.body",
+    label: "Portfolio — Closing Text (above CTA buttons)",
+    page: "Portfolio",
+    pageHref: "/portfolio",
+    maxLength: 300,
+    default: "Every event is shaped around your vision, your guests, and the moments that matter most.",
+  },
+  // Blog listing page — the post grid itself (title, date, excerpt,
+  // featured image) is entirely database-driven (BlogPost records),
+  // already editable through the existing CMS/Blog admin. Only the
+  // page's own hero text is a Site Copy fit.
+  {
+    key: "blog.hero.eyebrow",
+    label: "Blog — Hero Eyebrow",
+    page: "Blog",
+    pageHref: "/blog",
+    maxLength: 100,
+    default: "News & Updates",
+  },
+  {
+    key: "blog.hero.headline",
+    label: "Blog — Hero Headline",
+    page: "Blog",
+    pageHref: "/blog",
+    maxLength: 150,
+    default: "Blog",
+  },
+  {
+    key: "blog.hero.body",
+    label: "Blog — Hero Supporting Text",
+    page: "Blog",
+    pageHref: "/blog",
+    maxLength: 400,
+    default: "Planning advice and updates from the Moira Events team.",
+  },
 ] as const;
 
 export type SiteCopyKey = (typeof SITE_COPY_SLOTS)[number]["key"];

@@ -50,6 +50,14 @@ export async function upsertSiteCopy(key: string, formData: FormData) {
     }),
   ]);
 
-  revalidatePath("/");
+  // Revalidate only the one page this key actually renders on (derived
+  // from the slot's own `pageHref`, already looked up above) rather than
+  // a hardcoded path list — every SITE_COPY_SLOTS entry already carries
+  // its page's route, so this stays correct automatically as new pages
+  // gain Site Copy coverage, with no second list to keep in sync. Was
+  // `revalidatePath("/")` unconditionally, which only actually refreshed
+  // Homepage keys; saves/clears on every other page's copy weren't
+  // reliably revalidating that page.
+  revalidatePath(slot.pageHref);
   return { status: "success" as const };
 }

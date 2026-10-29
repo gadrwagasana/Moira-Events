@@ -7,6 +7,7 @@ import { Faq } from "@/components/Faq";
 import { siteConfig } from "@/lib/content/config";
 import { getSiteSettings } from "@/lib/settings/data";
 import { formatE164Phone } from "@/lib/settings/format";
+import { getSiteCopy } from "@/lib/site-copy/data";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -42,12 +43,15 @@ const faqItems = [
 ];
 
 export default async function ContactPage() {
-  const settings = await getSiteSettings();
+  const [settings, copy] = await Promise.all([getSiteSettings(), getSiteCopy()]);
 
   return (
     <>
       <Breadcrumbs items={[{ label: "Contact", href: "/contact" }]} />
-      <PageHero eyebrow="Get In Touch" title="Contact Moira Events" />
+      <PageHero
+        eyebrow={copy["contact.hero.eyebrow"] ?? "Get In Touch"}
+        title={copy["contact.hero.headline"] ?? "Contact Moira Events"}
+      />
 
       <section className="section grid gap-12 lg:grid-cols-2">
         <div className="space-y-6">
@@ -108,14 +112,14 @@ export default async function ContactPage() {
         </div>
 
         <div>
-          <h2 className="mb-5 font-serif text-xl text-espresso-700">Send a Message</h2>
+          <h2 className="mb-5 font-serif text-xl text-espresso-700">{copy["contact.form.heading"] ?? "Send a Message"}</h2>
           <ContactLeadForm />
         </div>
       </section>
 
       <section className="bg-ivory-200">
         <div className="section max-w-2xl">
-          <h2 className="mb-6 font-serif text-2xl text-espresso-700">Frequently Asked Questions</h2>
+          <h2 className="mb-6 font-serif text-2xl text-espresso-700">{copy["contact.faq.heading"] ?? "Frequently Asked Questions"}</h2>
           <Faq items={faqItems} />
         </div>
       </section>
